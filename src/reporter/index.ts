@@ -30,10 +30,11 @@ export function generateReport(
       return formatMarkdown(reportData);
     case 'csv':
       return formatCsv(reportData);
-    default:
+    default: {
       // TypeScript exhaustiveness check
       const exhaustiveCheck: never = format;
       throw new Error(`Unsupported report format: ${exhaustiveCheck}`);
+    }
   }
 }
 

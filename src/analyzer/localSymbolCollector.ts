@@ -52,7 +52,7 @@ export function collectLocals(
         continue;
       }
 
-      const nameNode = (declNode as any).name;
+      const nameNode = (declNode as unknown as { name?: ts.Node }).name;
       if (!nameNode || !ts.isIdentifier(nameNode)) {
         continue;
       }

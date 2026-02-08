@@ -9,7 +9,7 @@ import type { ExportKind } from '../../../types/analysis';
  */
 export function collectGoExports(
   content: string,
-  filePath: string
+  _filePath: string
 ): ExportInfo[] {
   const exports: ExportInfo[] = [];
   const lines = content.split('\n');

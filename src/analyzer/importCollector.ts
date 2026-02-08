@@ -26,7 +26,7 @@ export function collectImports(
         const resolvedPath = resolveImportPath(source, fileDir, program);
         const specifiers: ImportSpecifier[] = [];
         let isNamespaceImport = false;
-        let isTypeOnly = importDecl.importClause?.isTypeOnly || false;
+        const isTypeOnly = importDecl.importClause?.isTypeOnly || false;
 
         if (importDecl.importClause) {
           const importClause = importDecl.importClause;

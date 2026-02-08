@@ -39,7 +39,7 @@ export async function handleWebviewMessage(message: WebviewMessage): Promise<voi
       break;
 
     default:
-      console.warn(`Unknown webview message command: ${message.command}`);
+      void vscode.window.showWarningMessage(`Unknown webview message command: ${message.command}`);
   }
 }
 

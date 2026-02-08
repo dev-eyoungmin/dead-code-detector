@@ -98,7 +98,7 @@ export class ReportWebviewPanel {
    */
   private injectWebviewHelpers(
     html: string,
-    webview: vscode.Webview,
+    _webview: vscode.Webview,
     _extensionUri: vscode.Uri
   ): string {
     // Add script to handle communication with the extension
@@ -139,7 +139,7 @@ export class ReportWebviewPanel {
   private createHtmlWrapper(
     content: string,
     webview: vscode.Webview,
-    extensionUri: vscode.Uri
+    _extensionUri: vscode.Uri
   ): string {
     const nonce = this.getNonce();
 

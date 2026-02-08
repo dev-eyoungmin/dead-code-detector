@@ -1,5 +1,4 @@
 import type { ExportInfo } from '../../../types';
-import type { ExportKind } from '../../../types/analysis';
 
 /**
  * Collects exported (public) symbols from a Java source file.
@@ -9,7 +8,7 @@ import type { ExportKind } from '../../../types/analysis';
  */
 export function collectJavaExports(
   content: string,
-  filePath: string
+  _filePath: string
 ): ExportInfo[] {
   const exports: ExportInfo[] = [];
   const lines = content.split('\n');
@@ -17,7 +16,7 @@ export function collectJavaExports(
   let inBlockComment = false;
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    const line = lines[i];
     const trimmed = line.trim();
 
     // Handle block comments

@@ -10,7 +10,7 @@ import type { ExportKind } from '../../../types/analysis';
  */
 export function collectPythonExports(
   content: string,
-  filePath: string
+  _filePath: string
 ): ExportInfo[] {
   const lines = content.split('\n');
 

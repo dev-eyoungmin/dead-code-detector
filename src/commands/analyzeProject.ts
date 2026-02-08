@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
 import { scanFiles } from '../scanner';
 import { analyze } from '../analyzer';
 import { log, logError } from '../utils/logger';
@@ -18,7 +16,6 @@ export function createAnalyzeProjectCommand(deps: CommandDeps): () => Promise<vo
       treeProvider,
       diagnosticManager,
       statusBar,
-      getLastResult,
       setLastResult,
     } = deps;
 

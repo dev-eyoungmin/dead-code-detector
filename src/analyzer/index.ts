@@ -1,5 +1,4 @@
 import type { AnalysisResult } from '../types/analysis';
-import type { SupportedLanguage } from '../types/language';
 import { createProgram } from './programFactory';
 import { buildDependencyGraph } from './dependencyGraph';
 import { detectUnusedFiles } from './unusedFileDetector';
@@ -32,8 +31,6 @@ export async function analyze(
 
   const filesByLanguage = groupFilesByLanguage(options.files);
   const mergedGraph = createEmptyGraph();
-  let hasMultipleLanguages = false;
-
   for (const [language, files] of filesByLanguage) {
     if (language === 'typescript') {
       // For TypeScript, use the direct path for backward compatibility
@@ -47,7 +44,6 @@ export async function analyze(
       }
       const graph = analyzer.buildGraph(files, options.rootDir);
       mergeGraphInto(mergedGraph, graph);
-      hasMultipleLanguages = true;
     }
   }
 

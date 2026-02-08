@@ -35,7 +35,7 @@ export function createProgram(
           ts.getParsedCommandLineOfConfigFile(
             configFilePath,
             {},
-            ts.sys as any
+            ts.sys as ts.ParseConfigFileHost
           )!
         )
       : undefined,

@@ -1,5 +1,4 @@
-import * as ts from 'typescript';
-import type { DependencyGraph } from '../types';
+import type { DependencyGraph, ImportInfo, ExportInfo, LocalSymbolInfo } from '../types';
 import type { UnusedFileResult } from '../types/analysis';
 
 /**
@@ -44,7 +43,7 @@ export function detectUnusedFiles(
  */
 function checkForSideEffects(
   filePath: string,
-  fileNode: { imports: any[]; exports: any[]; locals: any[] }
+  fileNode: { imports: ImportInfo[]; exports: ExportInfo[]; locals: LocalSymbolInfo[] }
 ): boolean {
   // If there are local symbols (non-exported declarations), the file likely has code
   if (fileNode.locals.length > 0) {

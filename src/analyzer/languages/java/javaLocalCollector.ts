@@ -1,5 +1,4 @@
 import type { LocalSymbolInfo } from '../../../types';
-import type { LocalKind } from '../../../types/analysis';
 
 /**
  * Collects local (private/package-private) symbols from a Java source file.

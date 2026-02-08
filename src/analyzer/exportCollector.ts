@@ -254,7 +254,7 @@ function isTypeOnlyExport(node: ts.Node): boolean {
     return modifiers.some(
       (mod: ts.Modifier) =>
         mod.kind === ts.SyntaxKind.ExportKeyword &&
-        (mod as any).isTypeOnly === true
+        (mod as unknown as { isTypeOnly?: boolean }).isTypeOnly === true
     );
   }
 
