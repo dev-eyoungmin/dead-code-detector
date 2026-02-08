@@ -1,0 +1,211 @@
+{
+  "name": "dead-code-detector",
+  "displayName": "Dead Code Detector",
+  "description": "Detect unused files, exports, and local variables/functions in TypeScript, JavaScript, Python, Go, and Java projects",
+  "version": "1.0.0",
+  "publisher": "dead-code-detector",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "dead code",
+    "unused",
+    "typescript",
+    "javascript",
+    "python",
+    "go",
+    "golang",
+    "java",
+    "lint"
+  ],
+  "icon": "resources/icon.png",
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/tsconfig.json",
+    "workspaceContains:**/jsconfig.json",
+    "workspaceContains:**/*.py",
+    "workspaceContains:**/go.mod",
+    "workspaceContains:**/pom.xml",
+    "workspaceContains:**/build.gradle"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "deadCodeDetector.analyzeProject",
+        "title": "Dead Code: Analyze Project",
+        "icon": "$(search)"
+      },
+      {
+        "command": "deadCodeDetector.analyzeCurrentFile",
+        "title": "Dead Code: Analyze Current File",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "deadCodeDetector.exportReport",
+        "title": "Dead Code: Export Report",
+        "icon": "$(export)"
+      },
+      {
+        "command": "deadCodeDetector.clearResults",
+        "title": "Dead Code: Clear Results",
+        "icon": "$(clear-all)"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "deadCodeDetector.resultsView",
+          "name": "Dead Code",
+          "icon": "resources/dark/dead-code.svg",
+          "contextualTitle": "Dead Code Detector"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "deadCodeDetector.analyzeProject",
+          "when": "view == deadCodeDetector.resultsView",
+          "group": "navigation"
+        },
+        {
+          "command": "deadCodeDetector.exportReport",
+          "when": "view == deadCodeDetector.resultsView",
+          "group": "navigation"
+        },
+        {
+          "command": "deadCodeDetector.clearResults",
+          "when": "view == deadCodeDetector.resultsView",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "deadCodeDetector.analyzeCurrentFile",
+          "group": "deadCode@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Dead Code Detector",
+      "properties": {
+        "deadCodeDetector.include": {
+          "type": "array",
+          "default": [
+            "**/*.ts",
+            "**/*.tsx",
+            "**/*.js",
+            "**/*.jsx",
+            "**/*.py",
+            "**/*.go",
+            "**/*.java"
+          ],
+          "description": "Glob patterns for files to include in analysis"
+        },
+        "deadCodeDetector.exclude": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/*.d.ts",
+            "**/*.test.*",
+            "**/*.spec.*",
+            "**/__tests__/**",
+            "**/__pycache__/**",
+            "**/.venv/**",
+            "**/venv/**",
+            "**/vendor/**",
+            "**/*_test.go",
+            "**/target/**",
+            "**/Test*.java",
+            "**/*Test.java"
+          ],
+          "description": "Glob patterns for files to exclude from analysis"
+        },
+        "deadCodeDetector.entryPoints": {
+          "type": "array",
+          "default": [],
+          "description": "Entry point files (always considered used). If empty, auto-detected from package.json"
+        },
+        "deadCodeDetector.analyzeOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically analyze on file save"
+        },
+        "deadCodeDetector.reportFormat": {
+          "type": "string",
+          "enum": [
+            "html",
+            "json",
+            "markdown",
+            "csv"
+          ],
+          "default": "html",
+          "description": "Default report export format"
+        },
+        "deadCodeDetector.confidenceThreshold": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "default": "medium",
+          "description": "Minimum confidence level to report (high = only certain dead code, low = include possible false positives)"
+        },
+        "deadCodeDetector.ignorePatterns": {
+          "type": "array",
+          "default": [],
+          "description": "Additional patterns to ignore (e.g., files with specific decorators)"
+        },
+        "deadCodeDetector.enabledLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["typescript", "python", "go", "java"]
+          },
+          "default": ["typescript", "python", "go", "java"],
+          "description": "Languages to include in dead code analysis"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:fsevents --external:typescript --format=cjs --platform=node --target=node18 --sourcemap",
+    "watch": "pnpm build --watch",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepackage": "pnpm build",
+    "package": "vsce package --no-dependencies",
+    "dev": "concurrently \"pnpm watch\" \"pnpm test:watch\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "concurrently": "^8.2.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "fast-glob": "^3.3.0",
+    "minimatch": "^9.0.0",
+    "typescript": "^5.3.0"
+  }
+}

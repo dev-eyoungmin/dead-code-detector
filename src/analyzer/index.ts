@@ -1,0 +1,117 @@
+import type { AnalysisResult } from '../types/analysis';
+import type { SupportedLanguage } from '../types/language';
+import { createProgram } from './programFactory';
+import { buildDependencyGraph } from './dependencyGraph';
+import { detectUnusedFiles } from './unusedFileDetector';
+import { detectUnusedExports } from './unusedExportDetector';
+import { detectUnusedLocals } from './unusedLocalDetector';
+import { createEmptyGraph, mergeGraphInto } from './graphBuilder';
+import { groupFilesByLanguage, getAnalyzer } from './languages';
+
+/**
+ * Options for running analysis
+ */
+export interface AnalyzeOptions {
+  /** List of file paths to analyze */
+  files: string[];
+  /** Root directory of the project */
+  rootDir: string;
+  /** Entry point files (their exports are considered public API) */
+  entryPoints: string[];
+  /** Optional path to tsconfig.json (used for TypeScript backward compatibility) */
+  tsconfigPath?: string;
+}
+
+/**
+ * Analyzes files for dead code across all supported languages
+ */
+export async function analyze(
+  options: AnalyzeOptions
+): Promise<AnalysisResult> {
+  const startTime = Date.now();
+
+  const filesByLanguage = groupFilesByLanguage(options.files);
+  const mergedGraph = createEmptyGraph();
+  let hasMultipleLanguages = false;
+
+  for (const [language, files] of filesByLanguage) {
+    if (language === 'typescript') {
+      // For TypeScript, use the direct path for backward compatibility
+      const program = createProgram(files, options.tsconfigPath);
+      const graph = buildDependencyGraph(files, program);
+      mergeGraphInto(mergedGraph, graph);
+    } else {
+      const analyzer = getAnalyzer(language);
+      if (!analyzer) {
+        continue;
+      }
+      const graph = analyzer.buildGraph(files, options.rootDir);
+      mergeGraphInto(mergedGraph, graph);
+      hasMultipleLanguages = true;
+    }
+  }
+
+  // Detect unused code
+  const unusedFiles = detectUnusedFiles(mergedGraph, options.entryPoints);
+  const unusedExports = detectUnusedExports(mergedGraph, options.entryPoints);
+  const unusedLocals = detectUnusedLocals(mergedGraph);
+
+  // Calculate statistics
+  const totalExportCount = Array.from(mergedGraph.files.values()).reduce(
+    (sum, file) => sum + file.exports.length,
+    0
+  );
+
+  const totalLocalCount = Array.from(mergedGraph.files.values()).reduce(
+    (sum, file) => sum + file.locals.length,
+    0
+  );
+
+  const durationMs = Date.now() - startTime;
+
+  return {
+    unusedFiles,
+    unusedExports,
+    unusedLocals,
+    analyzedFileCount: options.files.length,
+    totalExportCount,
+    totalLocalCount,
+    durationMs,
+    timestamp: Date.now(),
+  };
+}
+
+/**
+ * Analyzes a single file and returns only results for that file
+ */
+export async function analyzeFile(
+  filePath: string,
+  options: AnalyzeOptions
+): Promise<AnalysisResult> {
+  // Run full analysis
+  const fullResult = await analyze(options);
+
+  // Filter results to only include the specified file
+  const unusedFiles = fullResult.unusedFiles.filter(
+    (result) => result.filePath === filePath
+  );
+
+  const unusedExports = fullResult.unusedExports.filter(
+    (result) => result.filePath === filePath
+  );
+
+  const unusedLocals = fullResult.unusedLocals.filter(
+    (result) => result.filePath === filePath
+  );
+
+  return {
+    ...fullResult,
+    unusedFiles,
+    unusedExports,
+    unusedLocals,
+  };
+}
+
+// Re-export types and utilities
+export type { AnalysisResult } from '../types/analysis';
+export { clearProgramCache } from './programFactory';
