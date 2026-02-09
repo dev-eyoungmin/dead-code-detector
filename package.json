@@ -168,9 +168,19 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["typescript", "python", "go", "java"]
+            "enum": [
+              "typescript",
+              "python",
+              "go",
+              "java"
+            ]
           },
-          "default": ["typescript", "python", "go", "java"],
+          "default": [
+            "typescript",
+            "python",
+            "go",
+            "java"
+          ],
           "description": "Languages to include in dead code analysis"
         }
       }
@@ -194,13 +204,13 @@
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/vsce": "^2.22.0",
     "concurrently": "^8.2.0",
     "esbuild": "^0.25.0",
     "eslint": "^8.56.0",
     "prettier": "^3.2.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.2.0",
-    "@vscode/vsce": "^2.22.0"
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
