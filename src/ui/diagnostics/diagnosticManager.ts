@@ -86,11 +86,13 @@ export class DiagnosticManager {
     const diagnostics = this.getOrCreateDiagnosticArray(diagnosticsByFile, exp.filePath);
 
     // Create diagnostic at the export location
+    const line = Math.max(0, exp.line - 1);
+    const col = Math.max(0, exp.column);
     const range = new vscode.Range(
-      exp.line - 1,
-      exp.column - 1,
-      exp.line - 1,
-      exp.column - 1 + exp.exportName.length
+      line,
+      col,
+      line,
+      col + exp.exportName.length
     );
     const message = `Unused export: ${exp.exportName} (${exp.kind}, confidence: ${exp.confidence})`;
     const diagnostic = this.createDiagnostic(range, message, exp.confidence);
@@ -110,11 +112,13 @@ export class DiagnosticManager {
     const diagnostics = this.getOrCreateDiagnosticArray(diagnosticsByFile, local.filePath);
 
     // Create diagnostic at the local symbol location
+    const line = Math.max(0, local.line - 1);
+    const col = Math.max(0, local.column);
     const range = new vscode.Range(
-      local.line - 1,
-      local.column - 1,
-      local.line - 1,
-      local.column - 1 + local.symbolName.length
+      line,
+      col,
+      line,
+      col + local.symbolName.length
     );
     const message = `Unused local: ${local.symbolName} (${local.kind}, confidence: ${local.confidence})`;
     const diagnostic = this.createDiagnostic(range, message, local.confidence);

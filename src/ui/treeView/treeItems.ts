@@ -64,8 +64,8 @@ export class DeadCodeTreeItem extends TreeItemBase {
         {
           selection: item.line !== undefined && item.column !== undefined
             ? new vscode.Range(
-                new vscode.Position(item.line - 1, item.column - 1),
-                new vscode.Position(item.line - 1, item.column - 1)
+                new vscode.Position(Math.max(0, item.line - 1), Math.max(0, item.column)),
+                new vscode.Position(Math.max(0, item.line - 1), Math.max(0, item.column))
               )
             : undefined,
         } as vscode.TextDocumentShowOptions,
