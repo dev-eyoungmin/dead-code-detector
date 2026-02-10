@@ -2,9 +2,13 @@
   "name": "dead-code-detector",
   "displayName": "Dead Code Detector",
   "description": "Detect unused files, exports, and local variables/functions in TypeScript, JavaScript, Python, Go, and Java projects",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "dead-code-detector",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dev-eyoungmin/dead-code-detector"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -187,7 +191,8 @@
     }
   },
   "scripts": {
-    "build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:fsevents --external:typescript --format=cjs --platform=node --target=node18 --sourcemap",
+    "vscode:prepublish": "pnpm build",
+    "build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:fsevents --format=cjs --platform=node --target=node18 --sourcemap",
     "watch": "pnpm build --watch",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
