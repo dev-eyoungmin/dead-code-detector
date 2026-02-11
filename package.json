@@ -2,7 +2,7 @@
   "name": "dead-code-detector",
   "displayName": "Dead Code Detector",
   "description": "Detect unused files, exports, and local variables/functions in TypeScript, JavaScript, Python, Go, and Java projects",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "dead-code-detector",
   "license": "MIT",
   "repository": {
