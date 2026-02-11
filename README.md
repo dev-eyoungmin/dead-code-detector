@@ -83,6 +83,10 @@ pnpm lint
 - VS Code 1.85.0 or later
 - TypeScript/JavaScript project with `tsconfig.json` or `jsconfig.json`
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a full list of changes in each release.
+
 ## License
 
 MIT
