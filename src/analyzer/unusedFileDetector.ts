@@ -1,5 +1,7 @@
+import * as fs from 'fs';
 import type { DependencyGraph, ImportInfo, ExportInfo, LocalSymbolInfo } from '../types';
 import type { UnusedFileResult } from '../types/analysis';
+import { hasFileIgnoreComment } from '../utils/ignoreComment';
 
 /**
  * Detects unused files in the dependency graph
@@ -21,6 +23,16 @@ export function detectUnusedFiles(
 
     // File is unused if no other file imports it
     if (inboundCount === 0) {
+      // Check @dead-code-ignore file-level comment
+      try {
+        const source = fs.readFileSync(filePath, 'utf-8');
+        if (hasFileIgnoreComment(source)) {
+          continue;
+        }
+      } catch {
+        // If file can't be read, proceed with detection
+      }
+
       const hasSideEffects = checkForSideEffects(filePath, fileNode);
 
       unusedFiles.push({

@@ -74,6 +74,7 @@ export function createAnalyzeProjectCommand(deps: CommandDeps): () => Promise<vo
               files: scanResult.files,
               rootDir,
               entryPoints,
+              ignorePatterns: config.ignorePatterns,
             });
 
             log(

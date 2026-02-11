@@ -67,6 +67,7 @@ export function createAnalyzeCurrentFileCommand(deps: CommandDeps): () => Promis
               files: [filePath],
               rootDir,
               entryPoints: config.entryPoints,
+              ignorePatterns: config.ignorePatterns,
             });
 
             log(

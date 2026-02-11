@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import type { LanguageAnalyzer, DependencyGraph } from '../../types';
 import { createProgram, clearProgramCache } from '../programFactory';
 import { buildDependencyGraph } from '../dependencyGraph';
+import { findFrameworkEntryPoints } from '../frameworkDetector';
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
   readonly language = 'typescript' as const;
@@ -72,6 +73,14 @@ export class TypeScriptAnalyzer implements LanguageAnalyzer {
       const entryPath = path.join(rootDir, entry);
       if (fs.existsSync(entryPath) && !entryPoints.includes(entryPath)) {
         entryPoints.push(entryPath);
+      }
+    }
+
+    // Add framework-specific entry points
+    const frameworkEntryPoints = await findFrameworkEntryPoints(rootDir);
+    for (const ep of frameworkEntryPoints) {
+      if (!entryPoints.includes(ep)) {
+        entryPoints.push(ep);
       }
     }
 

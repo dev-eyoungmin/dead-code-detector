@@ -149,12 +149,7 @@ function resolveImportPath(
   containingFileDir: string,
   program: ts.Program
 ): string {
-  // Skip external modules (node_modules)
-  if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
-    return importPath;
-  }
-
-  // Try using TypeScript's module resolution
+  // 1. Always try TS resolver first (handles path aliases, baseUrl, etc.)
   const compilerOptions = program.getCompilerOptions();
   const resolved = ts.resolveModuleName(
     importPath,
@@ -164,10 +159,19 @@ function resolveImportPath(
   );
 
   if (resolved.resolvedModule) {
+    // node_modules module → treat as external
+    if (resolved.resolvedModule.isExternalLibraryImport) {
+      return importPath;
+    }
     return resolved.resolvedModule.resolvedFileName;
   }
 
-  // Fallback to manual resolution
+  // 2. TS resolution failed + non-relative path → external module
+  if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
+    return importPath;
+  }
+
+  // 3. Relative path fallback
   return resolvePathManually(importPath, containingFileDir);
 }
 

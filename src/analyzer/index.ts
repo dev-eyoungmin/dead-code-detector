@@ -1,3 +1,4 @@
+import { minimatch } from 'minimatch';
 import type { AnalysisResult } from '../types/analysis';
 import { createProgram } from './programFactory';
 import { buildDependencyGraph } from './dependencyGraph';
@@ -6,6 +7,7 @@ import { detectUnusedExports } from './unusedExportDetector';
 import { detectUnusedLocals } from './unusedLocalDetector';
 import { createEmptyGraph, mergeGraphInto } from './graphBuilder';
 import { groupFilesByLanguage, getAnalyzer } from './languages';
+import { getFrameworkConventionalExports } from './frameworkDetector';
 
 /**
  * Options for running analysis
@@ -19,6 +21,8 @@ export interface AnalyzeOptions {
   entryPoints: string[];
   /** Optional path to tsconfig.json (used for TypeScript backward compatibility) */
   tsconfigPath?: string;
+  /** Glob patterns for files to ignore in results */
+  ignorePatterns?: string[];
 }
 
 /**
@@ -48,9 +52,26 @@ export async function analyze(
   }
 
   // Detect unused code
-  const unusedFiles = detectUnusedFiles(mergedGraph, options.entryPoints);
-  const unusedExports = detectUnusedExports(mergedGraph, options.entryPoints);
-  const unusedLocals = detectUnusedLocals(mergedGraph);
+  const frameworkExports = getFrameworkConventionalExports(options.rootDir);
+  let unusedFiles = detectUnusedFiles(mergedGraph, options.entryPoints);
+  let unusedExports = detectUnusedExports(
+    mergedGraph,
+    options.entryPoints,
+    frameworkExports
+  );
+  let unusedLocals = detectUnusedLocals(mergedGraph);
+
+  // Filter by ignorePatterns
+  if (options.ignorePatterns && options.ignorePatterns.length > 0) {
+    const matchesIgnore = (filePath: string): boolean =>
+      options.ignorePatterns!.some((pattern) =>
+        minimatch(filePath, pattern, { matchBase: true })
+      );
+
+    unusedFiles = unusedFiles.filter((r) => !matchesIgnore(r.filePath));
+    unusedExports = unusedExports.filter((r) => !matchesIgnore(r.filePath));
+    unusedLocals = unusedLocals.filter((r) => !matchesIgnore(r.filePath));
+  }
 
   // Calculate statistics
   const totalExportCount = Array.from(mergedGraph.files.values()).reduce(
