@@ -16,6 +16,7 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
     // export interface X {}
     // export enum X {}
     if (hasExportModifier(node)) {
+      const isDefault = hasDefaultModifier(node);
       const declarations = getDeclarations(node);
       for (const decl of declarations) {
         let position: number;
@@ -29,12 +30,12 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
         const { line, character } = sourceFile.getLineAndCharacterOfPosition(position);
 
         exports.push({
-          name: decl.name || 'default',
-          isDefault: false,
+          name: isDefault ? 'default' : (decl.name || 'default'),
+          isDefault: isDefault,
           isReExport: false,
           line: line + 1, // Convert to 1-based
           column: character,
-          kind: getExportKind(node),
+          kind: isDefault ? 'default' : getExportKind(node),
           isTypeOnly: isTypeOnlyExport(node),
         });
       }
@@ -46,14 +47,8 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
         node.getStart()
       );
 
-      // Try to get the name if it's a named declaration
-      let name = 'default';
-      if (ts.isIdentifier(node.expression)) {
-        name = node.expression.text;
-      }
-
       exports.push({
-        name,
+        name: 'default',
         isDefault: true,
         isReExport: false,
         line: line + 1,
@@ -82,7 +77,7 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
                 sourceFile.getLineAndCharacterOfPosition(element.getStart());
 
               exports.push({
-                name: element.propertyName?.text || element.name.text,
+                name: element.name.text,
                 isDefault: false,
                 isReExport: true,
                 reExportSource,
@@ -134,7 +129,7 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
           );
 
           exports.push({
-            name: element.propertyName?.text || element.name.text,
+            name: element.name.text,
             isDefault: false,
             isReExport: false,
             line: line + 1,
@@ -151,6 +146,19 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
 
   visit(sourceFile);
   return exports;
+}
+
+/**
+ * Checks if a node has the 'default' modifier (e.g. export default function X)
+ */
+function hasDefaultModifier(node: ts.Node): boolean {
+  const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+  if (!modifiers) {
+    return false;
+  }
+  return modifiers.some(
+    (mod) => mod.kind === ts.SyntaxKind.DefaultKeyword
+  );
 }
 
 /**

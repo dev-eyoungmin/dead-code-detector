@@ -105,6 +105,43 @@ export function collectImports(
       }
     }
 
+    // export * from 'module' / export { x } from 'module' — treated as imports too
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      const source = node.moduleSpecifier.text;
+      const resolvedPath = resolveImportPath(source, fileDir, program);
+      const specifiers: ImportSpecifier[] = [];
+      let isNamespaceImport = false;
+
+      if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+        // export { x, y } from 'module'
+        for (const element of node.exportClause.elements) {
+          specifiers.push({
+            name: element.propertyName?.text || element.name.text,
+            alias: element.propertyName ? element.name.text : undefined,
+            isDefault: false,
+            isNamespace: false,
+          });
+        }
+      } else {
+        // export * from 'module' or export * as X from 'module'
+        isNamespaceImport = true;
+        specifiers.push({
+          name: '*',
+          isDefault: false,
+          isNamespace: true,
+        });
+      }
+
+      imports.push({
+        source,
+        resolvedPath,
+        specifiers,
+        isNamespaceImport,
+        isDynamicImport: false,
+        isTypeOnly: node.isTypeOnly || false,
+      });
+    }
+
     // require('module') - CommonJS require
     if (
       ts.isCallExpression(node) &&
@@ -163,7 +200,7 @@ function resolveImportPath(
     if (resolved.resolvedModule.isExternalLibraryImport) {
       return importPath;
     }
-    return resolved.resolvedModule.resolvedFileName;
+    return path.normalize(resolved.resolvedModule.resolvedFileName);
   }
 
   // 2. TS resolution failed + non-relative path → external module

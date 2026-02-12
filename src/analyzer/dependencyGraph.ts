@@ -85,6 +85,12 @@ export function buildDependencyGraph(
           const usages = exportUsages.get(key);
           if (usages) {
             usages.add(filePath);
+          } else {
+            // If named import not found in direct exports, check star re-exports
+            const resolved = resolveStarReExport(resolvedPath, importedName, fileMap, exportUsages);
+            if (resolved) {
+              resolved.add(filePath);
+            }
           }
         }
       }
@@ -97,6 +103,54 @@ export function buildDependencyGraph(
     outboundEdges,
     exportUsages,
   };
+}
+
+/**
+ * Resolves a named import through star re-export chains.
+ * When a file does `export * from './other'`, named imports from that file
+ * need to be traced to the actual source module.
+ */
+function resolveStarReExport(
+  filePath: string,
+  exportName: string,
+  fileMap: Map<string, FileNode>,
+  exportUsages: Map<string, Set<string>>,
+  visited?: Set<string>
+): Set<string> | undefined {
+  // Prevent infinite loops in circular re-exports
+  if (!visited) {
+    visited = new Set();
+  }
+  if (visited.has(filePath)) {
+    return undefined;
+  }
+  visited.add(filePath);
+
+  const file = fileMap.get(filePath);
+  if (!file) {
+    return undefined;
+  }
+
+  for (const exp of file.exports) {
+    if (exp.name === '*' && exp.isReExport && exp.reExportSource) {
+      // Find the resolved path for this re-export source via the file's imports
+      for (const imp of file.imports) {
+        if (imp.source === exp.reExportSource && fileMap.has(imp.resolvedPath)) {
+          const key = makeExportKey(imp.resolvedPath, exportName);
+          const usages = exportUsages.get(key);
+          if (usages) {
+            return usages;
+          }
+          // Recursively follow the chain
+          const deeper = resolveStarReExport(imp.resolvedPath, exportName, fileMap, exportUsages, visited);
+          if (deeper) {
+            return deeper;
+          }
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 /**
