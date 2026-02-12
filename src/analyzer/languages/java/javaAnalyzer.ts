@@ -6,6 +6,11 @@ import { collectJavaExports } from './javaExportCollector';
 import { collectJavaLocals } from './javaLocalCollector';
 import { detectSourceRoots } from './javaModuleResolver';
 import { buildGraphFromFileNodes } from '../../graphBuilder';
+import {
+  detectJavaFramework,
+  findSpringAnnotatedFiles,
+  findAndroidComponentFiles,
+} from './javaFrameworkDetector';
 
 export class JavaAnalyzer implements LanguageAnalyzer {
   readonly language = 'java' as const;
@@ -60,7 +65,19 @@ export class JavaAnalyzer implements LanguageAnalyzer {
       entryPoints.push(...mainFiles);
     }
 
-    return entryPoints;
+    // Framework-specific entry points
+    const framework = detectJavaFramework(rootDir);
+    if (framework?.type === 'spring') {
+      const annotatedFiles = findSpringAnnotatedFiles(rootDir);
+      entryPoints.push(...annotatedFiles);
+    }
+    if (framework?.type === 'android') {
+      const androidFiles = findAndroidComponentFiles(rootDir);
+      entryPoints.push(...androidFiles);
+    }
+
+    // Deduplicate
+    return [...new Set(entryPoints)];
   }
 
   dispose(): void {

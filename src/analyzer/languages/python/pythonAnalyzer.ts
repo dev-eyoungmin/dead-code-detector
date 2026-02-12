@@ -5,6 +5,7 @@ import { collectPythonImports } from './pythonImportCollector';
 import { collectPythonExports } from './pythonExportCollector';
 import { collectPythonLocals } from './pythonLocalCollector';
 import { buildGraphFromFileNodes } from '../../graphBuilder';
+import { findPythonFrameworkEntryPoints } from './pythonFrameworkDetector';
 
 export class PythonAnalyzer implements LanguageAnalyzer {
   readonly language = 'python' as const;
@@ -57,7 +58,12 @@ export class PythonAnalyzer implements LanguageAnalyzer {
       }
     }
 
-    return entryPoints;
+    // Framework-specific entry points
+    const frameworkEntryPoints = await findPythonFrameworkEntryPoints(rootDir);
+    entryPoints.push(...frameworkEntryPoints);
+
+    // Deduplicate
+    return [...new Set(entryPoints)];
   }
 
   dispose(): void {

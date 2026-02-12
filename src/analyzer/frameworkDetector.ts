@@ -8,9 +8,15 @@ export type FrameworkType =
   | 'nestjs'
   | 'angular'
   | 'remix'
+  | 'vue'
+  | 'svelte'
+  | 'express'
+  | 'gatsby'
+  | 'storybook'
+  | 'expo'
   | null;
 
-interface FrameworkInfo {
+export interface FrameworkInfo {
   type: FrameworkType;
   entryPatterns: string[];
   conventionalExports: string[];
@@ -32,6 +38,12 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'src/app/**/error.{ts,tsx,js,jsx}',
       'app/**/not-found.{ts,tsx,js,jsx}',
       'src/app/**/not-found.{ts,tsx,js,jsx}',
+      'app/**/template.{ts,tsx,js,jsx}',
+      'src/app/**/template.{ts,tsx,js,jsx}',
+      'app/**/default.{ts,tsx,js,jsx}',
+      'src/app/**/default.{ts,tsx,js,jsx}',
+      'app/api/**/*.{ts,js}',
+      'src/app/api/**/*.{ts,js}',
       'middleware.{ts,js}',
       'src/middleware.{ts,js}',
     ],
@@ -48,6 +60,18 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'preferredRegion',
       'fetchCache',
       'dynamicParams',
+      // Route Handlers
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'PATCH',
+      'HEAD',
+      'OPTIONS',
+      // App Router
+      'generateViewport',
+      'viewport',
+      'default',
     ],
   },
   'react-native': {
@@ -58,7 +82,16 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'index.{tsx,ts,jsx,js}',
       'src/App.{tsx,ts,jsx,js}',
     ],
-    conventionalExports: [],
+    conventionalExports: [
+      'navigationOptions',
+      'screenOptions',
+      'defaultProps',
+      'propTypes',
+      'contextTypes',
+      'childContextTypes',
+      'displayName',
+      'NavigationContainer',
+    ],
   },
   nestjs: {
     type: 'nestjs',
@@ -72,7 +105,25 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'src/**/*.filter.{ts,js}',
       'src/main.{ts,js}',
     ],
-    conventionalExports: [],
+    conventionalExports: [
+      'AppModule',
+      'AppController',
+      'AppService',
+      // Lifecycle hooks
+      'onModuleInit',
+      'onModuleDestroy',
+      'onApplicationBootstrap',
+      'beforeApplicationShutdown',
+      'onApplicationShutdown',
+      // Common patterns
+      'validate',
+      'transform',
+      'canActivate',
+      'intercept',
+      'catch',
+      'use',
+      'createParamDecorator',
+    ],
   },
   angular: {
     type: 'angular',
@@ -85,7 +136,26 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'src/**/*.guard.ts',
       'src/main.ts',
     ],
-    conventionalExports: [],
+    conventionalExports: [
+      'AppModule',
+      'AppComponent',
+      'AppRoutingModule',
+      // Lifecycle hooks
+      'ngOnInit',
+      'ngOnDestroy',
+      'ngOnChanges',
+      'ngAfterViewInit',
+      'ngAfterContentInit',
+      'ngDoCheck',
+      // Router
+      'canActivate',
+      'canDeactivate',
+      'canLoad',
+      'resolve',
+      // Pipes & Directives
+      'transform',
+      'validate',
+    ],
   },
   remix: {
     type: 'remix',
@@ -107,6 +177,85 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'shouldRevalidate',
     ],
   },
+  vue: {
+    type: 'vue',
+    entryPatterns: [
+      'src/App.vue',
+      'src/main.{ts,js}',
+      'src/views/**/*.vue',
+      'src/router/**/*.{ts,js}',
+    ],
+    conventionalExports: [
+      'setup',
+      'defineComponent',
+      'defineProps',
+      'defineEmits',
+      'defineExpose',
+    ],
+  },
+  svelte: {
+    type: 'svelte',
+    entryPatterns: [
+      'src/App.svelte',
+      'src/routes/**/*.svelte',
+      'src/lib/**/*.svelte',
+    ],
+    conventionalExports: [],
+  },
+  express: {
+    type: 'express',
+    entryPatterns: [
+      'src/server.{ts,js}',
+      'src/app.{ts,js}',
+      'server.{ts,js}',
+      'app.{ts,js}',
+    ],
+    conventionalExports: ['router', 'middleware'],
+  },
+  gatsby: {
+    type: 'gatsby',
+    entryPatterns: [
+      'src/pages/**/*.{ts,tsx,js,jsx}',
+      'gatsby-config.{ts,js}',
+      'gatsby-node.{ts,js}',
+      'gatsby-browser.{ts,js}',
+      'gatsby-ssr.{ts,js}',
+    ],
+    conventionalExports: [
+      'createPages',
+      'onCreateNode',
+      'createSchemaCustomization',
+      'sourceNodes',
+      'wrapRootElement',
+      'wrapPageElement',
+    ],
+  },
+  storybook: {
+    type: 'storybook',
+    entryPatterns: [
+      '**/*.stories.{ts,tsx,js,jsx}',
+      '.storybook/**/*.{ts,tsx,js,jsx}',
+    ],
+    conventionalExports: [
+      'default',
+      'decorators',
+      'parameters',
+      'argTypes',
+      'args',
+      'play',
+      'render',
+      'loaders',
+    ],
+  },
+  expo: {
+    type: 'expo',
+    entryPatterns: [
+      'App.{tsx,ts,jsx,js}',
+      'app/**/*.{tsx,ts,jsx,js}',
+      'app.config.{ts,js}',
+    ],
+    conventionalExports: ['default'],
+  },
 };
 
 /** Dependency name → framework key mapping */
@@ -117,12 +266,21 @@ const FRAMEWORK_DEPS: Record<string, string> = {
   '@angular/core': 'angular',
   '@remix-run/react': 'remix',
   '@remix-run/node': 'remix',
+  vue: 'vue',
+  svelte: 'svelte',
+  express: 'express',
+  gatsby: 'gatsby',
+  '@storybook/react': 'storybook',
+  '@storybook/vue3': 'storybook',
+  expo: 'expo',
 };
 
 /**
- * Detects the framework used in the project by reading package.json
+ * Reads and parses the package.json dependencies from a root directory
  */
-export function detectFramework(rootDir: string): FrameworkInfo | null {
+function readAllDeps(
+  rootDir: string
+): Record<string, string> | null {
   const packageJsonPath = path.join(rootDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return null;
@@ -130,21 +288,56 @@ export function detectFramework(rootDir: string): FrameworkInfo | null {
 
   try {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    const allDeps = {
+    return {
       ...packageJson.dependencies,
       ...packageJson.devDependencies,
     };
-
-    for (const [depName, frameworkKey] of Object.entries(FRAMEWORK_DEPS)) {
-      if (allDeps[depName]) {
-        return FRAMEWORK_CONFIGS[frameworkKey] ?? null;
-      }
-    }
   } catch {
-    // Failed to parse package.json
+    return null;
+  }
+}
+
+/**
+ * Detects the first matching framework used in the project by reading package.json.
+ * Maintained for backward compatibility.
+ */
+export function detectFramework(rootDir: string): FrameworkInfo | null {
+  const allDeps = readAllDeps(rootDir);
+  if (!allDeps) {
+    return null;
+  }
+
+  for (const [depName, frameworkKey] of Object.entries(FRAMEWORK_DEPS)) {
+    if (allDeps[depName]) {
+      return FRAMEWORK_CONFIGS[frameworkKey] ?? null;
+    }
   }
 
   return null;
+}
+
+/**
+ * Detects all frameworks used in the project (e.g., Next.js + Storybook).
+ * Returns an array of FrameworkInfo for each detected framework.
+ */
+export function detectFrameworks(rootDir: string): FrameworkInfo[] {
+  const allDeps = readAllDeps(rootDir);
+  if (!allDeps) {
+    return [];
+  }
+
+  const frameworks: FrameworkInfo[] = [];
+
+  for (const [depName, frameworkKey] of Object.entries(FRAMEWORK_DEPS)) {
+    if (allDeps[depName]) {
+      const config = FRAMEWORK_CONFIGS[frameworkKey];
+      if (config && !frameworks.some((f) => f.type === config.type)) {
+        frameworks.push(config);
+      }
+    }
+  }
+
+  return frameworks;
 }
 
 /**
@@ -153,12 +346,14 @@ export function detectFramework(rootDir: string): FrameworkInfo | null {
 export async function findFrameworkEntryPoints(
   rootDir: string
 ): Promise<string[]> {
-  const framework = detectFramework(rootDir);
-  if (!framework) {
+  const frameworks = detectFrameworks(rootDir);
+  if (frameworks.length === 0) {
     return [];
   }
 
-  const matched = await fg(framework.entryPatterns, {
+  const allPatterns = frameworks.flatMap((f) => f.entryPatterns);
+
+  const matched = await fg(allPatterns, {
     cwd: rootDir,
     absolute: true,
     onlyFiles: true,
@@ -169,14 +364,21 @@ export async function findFrameworkEntryPoints(
 }
 
 /**
- * Returns conventional export names for the detected framework
+ * Returns conventional export names for all detected frameworks, merged.
  */
 export function getFrameworkConventionalExports(
   rootDir: string
 ): string[] {
-  const framework = detectFramework(rootDir);
-  if (!framework) {
+  const frameworks = detectFrameworks(rootDir);
+  if (frameworks.length === 0) {
     return [];
   }
-  return framework.conventionalExports;
+
+  const allExports = new Set<string>();
+  for (const framework of frameworks) {
+    for (const exp of framework.conventionalExports) {
+      allExports.add(exp);
+    }
+  }
+  return Array.from(allExports);
 }

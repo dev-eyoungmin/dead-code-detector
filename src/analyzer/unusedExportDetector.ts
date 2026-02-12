@@ -104,12 +104,27 @@ function determineConfidence(
     return 'low';
   }
 
-  // .tsx PascalCase default exports are likely React components used by framework
+  // .tsx/.jsx PascalCase default exports are likely React components used by framework
   if (
     exportInfo.isDefault &&
-    filePath.endsWith('.tsx') &&
+    (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) &&
     /^[A-Z]/.test(exportInfo.name)
   ) {
+    return 'low';
+  }
+
+  // React hooks: use* pattern (useAuth, useTheme, etc.)
+  if (/^use[A-Z]/.test(exportInfo.name)) {
+    return 'low';
+  }
+
+  // HOC pattern: with* (withAuth, withRouter, etc.)
+  if (/^with[A-Z]/.test(exportInfo.name) && exportInfo.kind === 'function') {
+    return 'low';
+  }
+
+  // Context/Provider/Consumer pattern
+  if (/(?:Context|Provider|Consumer)$/.test(exportInfo.name)) {
     return 'low';
   }
 
