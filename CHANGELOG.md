@@ -5,6 +5,28 @@ All notable changes to the **Dead Code Detector** extension will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-02-12
+
+### Added
+- **New framework detection**: Vue, Svelte, Express, Gatsby, Storybook, Expo auto-detected from `package.json`
+- **Multi-framework support**: `detectFrameworks()` detects multiple frameworks simultaneously (e.g., Next.js + Storybook); entry points and conventional exports are merged from all detected frameworks
+- **React pattern heuristics**: `use*` hooks, `with*` HOC functions, `*Context`/`*Provider`/`*Consumer` exports now receive `low` confidence; `.jsx` PascalCase default exports recognized alongside `.tsx`
+- **Next.js Route Handlers**: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS` added as conventional exports; `template`, `default`, and `app/api/**` entry patterns added
+- **NestJS conventional exports**: Lifecycle hooks (`onModuleInit`, `onModuleDestroy`, etc.), guards (`canActivate`), interceptors, and common patterns
+- **Angular conventional exports**: Lifecycle hooks (`ngOnInit`, `ngOnDestroy`, etc.), router guards (`canActivate`, `canDeactivate`), pipes
+- **React Native conventional exports**: `navigationOptions`, `screenOptions`, `displayName`, etc.
+- **Java framework detection**: Spring Boot (via `pom.xml`/`build.gradle` annotation scanning) and Android (via `AndroidManifest.xml`/extends patterns) entry point detection
+- **Python framework detection**: Django, Flask, FastAPI detected from `requirements.txt`, `Pipfile`, `pyproject.toml`; framework-specific entry patterns (`models.py`, `views.py`, routers, etc.)
+- 59 new tests (236 → 295 total)
+
+## [1.0.5] - 2026-02-12
+
+### Fixed
+- **Default export false positives**: Default exports now always register as name `default` via `hasDefaultModifier()`, ensuring `import X from './module'` correctly links to the default export
+- **Star re-export false positives**: Named imports through `export * from` chains are now traced via `resolveStarReExport()`, preventing unused-export false positives on barrel re-exports
+- **Path normalization**: TS-resolved import paths are now normalized with `path.normalize()` to prevent duplicate tracking from inconsistent path separators
+- **Aliased export names**: Re-exported and named exports with aliases now use the exported name (`element.name.text`) instead of the local property name
+
 ## [1.0.4] - 2026-02-12
 
 ### Added
