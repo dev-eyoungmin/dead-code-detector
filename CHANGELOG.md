@@ -5,6 +5,19 @@ All notable changes to the **Dead Code Detector** extension will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-02-13
+
+### Added
+- **Python export confidence**: Test files (`test_*.py`, `*_test.py`, `tests/` directory, `conftest.py`) and dunder methods/attributes (`__init__`, `__str__`, etc.) now receive `low` confidence
+- **Java export confidence**: Test files (`*Test.java`, `*Tests.java`, `*Spec.java`, `src/test/`) receive `low` confidence; common override methods (`toString`, `hashCode`, `equals`, `compareTo`, `clone`) and `enum` exports receive `low` confidence
+- **Go export confidence**: Test utility packages (`testdata/`, `testutil/`, `testing/` directories) receive `low` confidence
+- **Java local confidence**: `serialVersionUID` receives `low` confidence; logger fields (`logger`, `log`, `LOG`, `LOGGER`) receive `medium` confidence
+- **Python framework conventional exports**: Django (views, models, admin, URLs, middleware, signals — 30+ exports), Flask (`create_app`, `init_app`, etc.), FastAPI (`get_db`, `lifespan`, `startup`, `shutdown`, etc.)
+- **Java framework conventional exports**: Spring Boot (lifecycle, Spring Data, MVC, configuration, scheduling — 16 exports), Android (Activity/Fragment/Service/BroadcastReceiver/ContentProvider/ViewModel lifecycle — 22 exports)
+- **Go framework detector**: New `goFrameworkDetector.ts` detects Gin, Echo, Fiber, Chi from `go.mod`; adds conventional exports (`Handler`, `ServeHTTP`, `MarshalJSON`, `Scan`, etc.) and handler/middleware/routes entry patterns
+- **Orchestrator integration**: All language-specific conventional exports (Python, Java, Go) are now merged into the framework exports array alongside TypeScript framework exports
+- 29 new tests (330 → 359 total)
+
 ## [1.0.6] - 2026-02-12
 
 ### Added
