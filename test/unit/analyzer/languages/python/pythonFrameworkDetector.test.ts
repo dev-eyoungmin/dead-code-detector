@@ -5,6 +5,7 @@ import * as os from 'os';
 import {
   detectPythonFramework,
   findPythonFrameworkEntryPoints,
+  getPythonConventionalExports,
 } from '../../../../../src/analyzer/languages/python/pythonFrameworkDetector';
 
 describe('pythonFrameworkDetector', () => {
@@ -206,6 +207,54 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myproject.settings')
 
       expect(result.every(f => !f.includes('__pycache__'))).toBe(true);
       expect(result.every(f => !f.includes('venv'))).toBe(true);
+    });
+  });
+
+  describe('getPythonConventionalExports', () => {
+    it('should return Django conventional exports', () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'requirements.txt'),
+        'django==4.2.0\n'
+      );
+
+      const exports = getPythonConventionalExports(tempDir);
+      expect(exports).toContain('get_queryset');
+      expect(exports).toContain('Meta');
+      expect(exports).toContain('urlpatterns');
+      expect(exports).toContain('ready');
+    });
+
+    it('should return Flask conventional exports', () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'requirements.txt'),
+        'flask==3.0.0\n'
+      );
+
+      const exports = getPythonConventionalExports(tempDir);
+      expect(exports).toContain('create_app');
+      expect(exports).toContain('init_app');
+    });
+
+    it('should return FastAPI conventional exports', () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'requirements.txt'),
+        'fastapi>=0.100.0\n'
+      );
+
+      const exports = getPythonConventionalExports(tempDir);
+      expect(exports).toContain('get_db');
+      expect(exports).toContain('lifespan');
+      expect(exports).toContain('startup');
+    });
+
+    it('should return empty array for plain Python project', () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'requirements.txt'),
+        'requests==2.31.0\n'
+      );
+
+      const exports = getPythonConventionalExports(tempDir);
+      expect(exports).toEqual([]);
     });
   });
 });

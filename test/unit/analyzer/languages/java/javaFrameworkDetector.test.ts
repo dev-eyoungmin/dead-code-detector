@@ -6,6 +6,7 @@ import {
   detectJavaFramework,
   findSpringAnnotatedFiles,
   findAndroidComponentFiles,
+  getJavaConventionalExports,
 } from '../../../../../src/analyzer/languages/java/javaFrameworkDetector';
 
 describe('javaFrameworkDetector', () => {
@@ -306,6 +307,48 @@ public class Util {
 
       const result = findAndroidComponentFiles(tempDir);
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('getJavaConventionalExports', () => {
+    it('should return Spring conventional exports', () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'pom.xml'),
+        `<project>
+          <dependencies>
+            <dependency>
+              <groupId>org.springframework.boot</groupId>
+              <artifactId>spring-boot-starter-web</artifactId>
+            </dependency>
+          </dependencies>
+        </project>`
+      );
+
+      const exports = getJavaConventionalExports(tempDir);
+      expect(exports).toContain('findById');
+      expect(exports).toContain('findAll');
+      expect(exports).toContain('configure');
+      expect(exports).toContain('doFilter');
+    });
+
+    it('should return Android conventional exports', () => {
+      const manifestDir = path.join(tempDir, 'app', 'src', 'main');
+      fs.mkdirSync(manifestDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(manifestDir, 'AndroidManifest.xml'),
+        '<manifest package="com.example.app" />'
+      );
+
+      const exports = getJavaConventionalExports(tempDir);
+      expect(exports).toContain('onCreate');
+      expect(exports).toContain('onResume');
+      expect(exports).toContain('onReceive');
+      expect(exports).toContain('onCleared');
+    });
+
+    it('should return empty array for plain Java project', () => {
+      const exports = getJavaConventionalExports(tempDir);
+      expect(exports).toEqual([]);
     });
   });
 });

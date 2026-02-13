@@ -526,6 +526,29 @@ describe('frameworkDetector', () => {
       expect(result).toContain('displayName');
     });
 
+    it('should return React Native navigation/linking conventional exports', () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: {
+          'react-native': '^0.73.0',
+        },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const result = getFrameworkConventionalExports(tempDir);
+
+      expect(result).toContain('options');
+      expect(result).toContain('linking');
+      expect(result).toContain('theme');
+      expect(result).toContain('Screen');
+      expect(result).toContain('gestureHandlerRootHOC');
+    });
+
     it('should return NestJS conventional exports including lifecycle hooks', () => {
       const packageJson = {
         name: 'test-project',
@@ -588,6 +611,46 @@ describe('frameworkDetector', () => {
       expect(result).toContain('createPages');
       expect(result).toContain('onCreateNode');
       expect(result).toContain('wrapRootElement');
+    });
+
+    it('should return Expo Router conventional exports', () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: { expo: '^50.0.0' },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const result = getFrameworkConventionalExports(tempDir);
+
+      expect(result).toContain('default');
+      expect(result).toContain('unstable_settings');
+      expect(result).toContain('generateStaticParams');
+      expect(result).toContain('ErrorBoundary');
+    });
+
+    it('should return Next.js instrumentation and image generation exports', () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: { next: '^14.0.0' },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const result = getFrameworkConventionalExports(tempDir);
+
+      expect(result).toContain('register');
+      expect(result).toContain('size');
+      expect(result).toContain('contentType');
+      expect(result).toContain('alt');
     });
 
     it('should merge conventional exports from multiple frameworks', () => {
@@ -925,6 +988,46 @@ describe('frameworkDetector', () => {
 
       expect(result.some(file => file.includes('index.tsx'))).toBe(true);
       expect(result.some(file => file.includes('Button.stories.tsx'))).toBe(true);
+    });
+
+    it('should find Expo Router layout entry points', async () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: { expo: '^50.0.0' },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const appDir = path.join(tempDir, 'app');
+      fs.mkdirSync(appDir, { recursive: true });
+      fs.writeFileSync(path.join(appDir, '_layout.tsx'), 'export default function Layout() {}');
+
+      const result = await findFrameworkEntryPoints(tempDir);
+
+      expect(result.some(file => file.includes('_layout.tsx'))).toBe(true);
+    });
+
+    it('should find Next.js instrumentation entry points', async () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: { next: '^14.0.0' },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      fs.writeFileSync(path.join(tempDir, 'instrumentation.ts'), 'export async function register() {}');
+
+      const result = await findFrameworkEntryPoints(tempDir);
+
+      expect(result.some(file => file.includes('instrumentation.ts'))).toBe(true);
     });
 
     it('should ignore node_modules directory', async () => {

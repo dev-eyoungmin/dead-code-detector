@@ -162,6 +162,8 @@ function getLocalDeclarations(
     for (const decl of node.declarationList.declarations) {
       if (ts.isIdentifier(decl.name)) {
         declarations.push({ name: decl.name.text, declNode: decl });
+      } else if (ts.isObjectBindingPattern(decl.name) || ts.isArrayBindingPattern(decl.name)) {
+        collectBindingElements(decl.name, declarations);
       }
     }
   }
@@ -176,6 +178,8 @@ function getLocalDeclarations(
     for (const param of node.parameters) {
       if (ts.isIdentifier(param.name)) {
         declarations.push({ name: param.name.text, declNode: param });
+      } else if (ts.isObjectBindingPattern(param.name) || ts.isArrayBindingPattern(param.name)) {
+        collectBindingElements(param.name, declarations);
       }
     }
   }
@@ -201,6 +205,17 @@ function countReferences(
       const nodeSymbol = checker.getSymbolAtLocation(node);
       if (nodeSymbol === symbol) {
         count++;
+      } else if (
+        ts.isShorthandPropertyAssignment(node.parent) &&
+        node.parent.name === node
+      ) {
+        // In ShorthandPropertyAssignment ({ x }), getSymbolAtLocation returns the
+        // property symbol, not the local variable symbol. Use
+        // getShorthandAssignmentValueSymbol to get the actual variable symbol.
+        const valueSymbol = checker.getShorthandAssignmentValueSymbol(node.parent);
+        if (valueSymbol === symbol) {
+          count++;
+        }
       }
     }
 
@@ -212,6 +227,35 @@ function countReferences(
   // Subtract 1 if we counted the declaration itself
   // (this can happen if the declaration is an initializer expression)
   return Math.max(0, count);
+}
+
+/**
+ * Collects binding elements from object/array destructuring patterns.
+ * Implements ignoreRestSiblings: when a rest element (...rest) is present in
+ * an object destructuring, non-rest siblings are skipped (omit pattern).
+ */
+function collectBindingElements(
+  pattern: ts.ObjectBindingPattern | ts.ArrayBindingPattern,
+  declarations: Array<{ name: string; declNode: ts.Declaration }>
+): void {
+  const isObjPattern = ts.isObjectBindingPattern(pattern);
+  const hasRest = isObjPattern && pattern.elements.some(e => e.dotDotDotToken);
+
+  for (const element of pattern.elements) {
+    if (!ts.isBindingElement(element)) continue;
+
+    if (ts.isIdentifier(element.name)) {
+      // ignoreRestSiblings: in object destructuring with rest element,
+      // non-rest siblings are intentional omit patterns — skip them
+      if (hasRest && !element.dotDotDotToken) {
+        continue;
+      }
+      declarations.push({ name: element.name.text, declNode: element });
+    } else if (ts.isObjectBindingPattern(element.name) || ts.isArrayBindingPattern(element.name)) {
+      // Nested destructuring — recurse
+      collectBindingElements(element.name, declarations);
+    }
+  }
 }
 
 /**

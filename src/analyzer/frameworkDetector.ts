@@ -46,6 +46,14 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'src/app/api/**/*.{ts,js}',
       'middleware.{ts,js}',
       'src/middleware.{ts,js}',
+      // Instrumentation
+      'instrumentation.{ts,js}',
+      'src/instrumentation.{ts,js}',
+      // Image generation
+      'app/**/opengraph-image.{tsx,ts,jsx,js}',
+      'src/app/**/opengraph-image.{tsx,ts,jsx,js}',
+      'app/**/icon.{tsx,ts,jsx,js}',
+      'src/app/**/icon.{tsx,ts,jsx,js}',
     ],
     conventionalExports: [
       'getServerSideProps',
@@ -72,6 +80,12 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'generateViewport',
       'viewport',
       'default',
+      // Instrumentation
+      'register',
+      // Image generation
+      'size',
+      'contentType',
+      'alt',
     ],
   },
   'react-native': {
@@ -91,6 +105,12 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'childContextTypes',
       'displayName',
       'NavigationContainer',
+      // React Navigation / deep linking
+      'options',
+      'linking',
+      'theme',
+      'Screen',
+      'gestureHandlerRootHOC',
     ],
   },
   nestjs: {
@@ -253,8 +273,16 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'App.{tsx,ts,jsx,js}',
       'app/**/*.{tsx,ts,jsx,js}',
       'app.config.{ts,js}',
+      // Expo Router layouts
+      'app/_layout.{tsx,ts,jsx,js}',
+      'src/app/_layout.{tsx,ts,jsx,js}',
     ],
-    conventionalExports: ['default'],
+    conventionalExports: [
+      'default',
+      'unstable_settings',
+      'generateStaticParams',
+      'ErrorBoundary',
+    ],
   },
 };
 

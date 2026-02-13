@@ -6,7 +6,37 @@ export type JavaFrameworkType = 'spring' | 'android' | null;
 
 export interface JavaFrameworkInfo {
   type: JavaFrameworkType;
+  conventionalExports: string[];
 }
+
+const SPRING_CONVENTIONAL_EXPORTS = [
+  // Lifecycle
+  'init', 'destroy', 'afterPropertiesSet', 'run',
+  // Spring Data
+  'findById', 'findAll', 'save', 'delete', 'deleteById', 'existsById', 'count',
+  // Spring MVC / Controller patterns
+  'handleRequest', 'handleException',
+  // Configuration
+  'configure', 'addInterceptors', 'addCorsMappings', 'addResourceHandlers',
+  // Scheduling
+  'execute', 'doFilter',
+];
+
+const ANDROID_CONVENTIONAL_EXPORTS = [
+  // Activity lifecycle
+  'onCreate', 'onStart', 'onResume', 'onPause', 'onStop', 'onDestroy', 'onRestart',
+  // Fragment lifecycle
+  'onCreateView', 'onViewCreated', 'onDestroyView',
+  'onAttach', 'onDetach',
+  // Service lifecycle
+  'onBind', 'onUnbind', 'onStartCommand',
+  // BroadcastReceiver
+  'onReceive',
+  // ContentProvider
+  'query', 'insert', 'update', 'delete', 'getType',
+  // ViewModel
+  'onCleared',
+];
 
 /** Annotations that mark a Spring entry point class */
 const SPRING_ENTRY_ANNOTATIONS = [
@@ -47,10 +77,10 @@ export function detectJavaFramework(rootDir: string): JavaFrameworkInfo | null {
     try {
       const content = fs.readFileSync(pomPath, 'utf-8');
       if (content.includes('spring-boot-starter')) {
-        return { type: 'spring' };
+        return { type: 'spring', conventionalExports: SPRING_CONVENTIONAL_EXPORTS };
       }
       if (content.includes('com.android')) {
-        return { type: 'android' };
+        return { type: 'android', conventionalExports: ANDROID_CONVENTIONAL_EXPORTS };
       }
     } catch {
       // ignore read errors
@@ -64,10 +94,10 @@ export function detectJavaFramework(rootDir: string): JavaFrameworkInfo | null {
       try {
         const content = fs.readFileSync(gradlePath, 'utf-8');
         if (content.includes('org.springframework.boot')) {
-          return { type: 'spring' };
+          return { type: 'spring', conventionalExports: SPRING_CONVENTIONAL_EXPORTS };
         }
         if (content.includes('com.android.application') || content.includes('com.android.library')) {
-          return { type: 'android' };
+          return { type: 'android', conventionalExports: ANDROID_CONVENTIONAL_EXPORTS };
         }
       } catch {
         // ignore read errors
@@ -79,7 +109,7 @@ export function detectJavaFramework(rootDir: string): JavaFrameworkInfo | null {
   const manifestPath = path.join(rootDir, 'app', 'src', 'main', 'AndroidManifest.xml');
   const rootManifest = path.join(rootDir, 'AndroidManifest.xml');
   if (fs.existsSync(manifestPath) || fs.existsSync(rootManifest)) {
-    return { type: 'android' };
+    return { type: 'android', conventionalExports: ANDROID_CONVENTIONAL_EXPORTS };
   }
 
   return null;
@@ -170,4 +200,13 @@ function scanForPattern(dir: string, pattern: RegExp, results: string[]): void {
   } catch {
     // Skip unreadable directories
   }
+}
+
+/**
+ * Returns conventional export names for the detected Java framework
+ */
+export function getJavaConventionalExports(rootDir: string): string[] {
+  const framework = detectJavaFramework(rootDir);
+  if (!framework) return [];
+  return framework.conventionalExports;
 }

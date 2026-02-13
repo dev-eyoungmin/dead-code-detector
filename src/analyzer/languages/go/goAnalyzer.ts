@@ -6,6 +6,7 @@ import { collectGoExports } from './goExportCollector';
 import { collectGoLocals } from './goLocalCollector';
 import { readModulePath } from './goModuleResolver';
 import { buildGraphFromFileNodes } from '../../graphBuilder';
+import { findGoFrameworkEntryPoints } from './goFrameworkDetector';
 
 export class GoAnalyzer implements LanguageAnalyzer {
   readonly language = 'go' as const;
@@ -70,6 +71,14 @@ export class GoAnalyzer implements LanguageAnalyzer {
         }
       } catch {
         // Failed to read cmd directory
+      }
+    }
+
+    // Add framework-detected entry points
+    const frameworkEntries = await findGoFrameworkEntryPoints(rootDir);
+    for (const entry of frameworkEntries) {
+      if (!entryPoints.includes(entry)) {
+        entryPoints.push(entry);
       }
     }
 

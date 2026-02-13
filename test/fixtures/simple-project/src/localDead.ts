@@ -15,3 +15,10 @@ export function activeFunction(): number {
 
   return usedHelper();
 }
+
+export function shorthandTest(): { value: number; label: string } {
+  const value = 42;
+  const label = 'test';
+  const unused = 'dead'; // Dead: never referenced
+  return { value, label };
+}

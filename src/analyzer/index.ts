@@ -8,6 +8,9 @@ import { detectUnusedLocals } from './unusedLocalDetector';
 import { createEmptyGraph, mergeGraphInto } from './graphBuilder';
 import { groupFilesByLanguage, getAnalyzer } from './languages';
 import { getFrameworkConventionalExports } from './frameworkDetector';
+import { getPythonConventionalExports } from './languages/python/pythonFrameworkDetector';
+import { getJavaConventionalExports } from './languages/java/javaFrameworkDetector';
+import { getGoConventionalExports } from './languages/go/goFrameworkDetector';
 
 /**
  * Options for running analysis
@@ -52,7 +55,12 @@ export async function analyze(
   }
 
   // Detect unused code
-  const frameworkExports = getFrameworkConventionalExports(options.rootDir);
+  const frameworkExports = [
+    ...getFrameworkConventionalExports(options.rootDir),
+    ...getPythonConventionalExports(options.rootDir),
+    ...getJavaConventionalExports(options.rootDir),
+    ...getGoConventionalExports(options.rootDir),
+  ];
   let unusedFiles = detectUnusedFiles(mergedGraph, options.entryPoints);
   let unusedExports = detectUnusedExports(
     mergedGraph,

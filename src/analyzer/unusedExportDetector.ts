@@ -104,11 +104,87 @@ function determineConfidence(
     return 'low';
   }
 
+  // --- Python patterns ---
+
+  // Python test files: test_*.py, *_test.py, tests/ directory, conftest.py
+  if (
+    filePath.endsWith('.py') && (
+      /\/test_[^/]+\.py$/.test(filePath) ||
+      /_test\.py$/.test(filePath) ||
+      /\/tests\//.test(filePath) ||
+      /\/conftest\.py$/.test(filePath)
+    )
+  ) {
+    return 'low';
+  }
+
+  // Python dunder methods/attrs (consumed by framework/runtime)
+  if (filePath.endsWith('.py') && /^__\w+__$/.test(exportInfo.name)) {
+    return 'low';
+  }
+
+  // --- Go patterns ---
+
+  // Go test utility packages
+  if (filePath.endsWith('.go') && /\/(testdata|testutil|testing)\//.test(filePath)) {
+    return 'low';
+  }
+
+  // --- Java patterns ---
+
+  // Java test files: *Test.java, *Tests.java, *Spec.java, src/test/
+  if (
+    filePath.endsWith('.java') && (
+      /Test\.java$/.test(filePath) ||
+      /Tests\.java$/.test(filePath) ||
+      /Spec\.java$/.test(filePath) ||
+      /\/src\/test\//.test(filePath)
+    )
+  ) {
+    return 'low';
+  }
+
+  // Java: common overrides/lifecycle methods consumed by framework, and enums
+  if (
+    filePath.endsWith('.java') && (
+      /^(?:toString|hashCode|equals|compareTo|clone)$/.test(exportInfo.name) ||
+      exportInfo.kind === 'enum'
+    )
+  ) {
+    return 'low';
+  }
+
   // .tsx/.jsx PascalCase default exports are likely React components used by framework
   if (
     exportInfo.isDefault &&
     (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) &&
     /^[A-Z]/.test(exportInfo.name)
+  ) {
+    return 'low';
+  }
+
+  // .tsx/.jsx PascalCase named variable exports (React.forwardRef, memo, styled-components)
+  if (
+    exportInfo.kind === 'variable' &&
+    /^[A-Z]/.test(exportInfo.name) &&
+    (filePath.endsWith('.tsx') || filePath.endsWith('.jsx'))
+  ) {
+    return 'low';
+  }
+
+  // Test/spec file exports — consumed by test runners, not import-tracked
+  if (
+    /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(filePath) ||
+    /__tests__\//.test(filePath)
+  ) {
+    return 'low';
+  }
+
+  // Storybook CSF3 named story exports (Primary, Secondary, Large, etc.)
+  if (
+    /\.stories\.(ts|tsx|js|jsx)$/.test(filePath) &&
+    /^[A-Z]/.test(exportInfo.name) &&
+    !exportInfo.isDefault
   ) {
     return 'low';
   }
@@ -120,6 +196,24 @@ function determineConfidence(
 
   // HOC pattern: with* (withAuth, withRouter, etc.)
   if (/^with[A-Z]/.test(exportInfo.name) && exportInfo.kind === 'function') {
+    return 'low';
+  }
+
+  // Render prop functions: render* (renderItem, renderHeader, etc.)
+  if (/^render[A-Z]/.test(exportInfo.name) && exportInfo.kind === 'function') {
+    return 'low';
+  }
+
+  // Event handler functions: handle*, on* (handleSubmit, onPress, etc.)
+  if (
+    (/^handle[A-Z]/.test(exportInfo.name) || /^on[A-Z]/.test(exportInfo.name)) &&
+    exportInfo.kind === 'function'
+  ) {
+    return 'low';
+  }
+
+  // Redux selector functions: select* (selectUser, selectItems, etc.)
+  if (/^select[A-Z]/.test(exportInfo.name) && exportInfo.kind === 'function') {
     return 'low';
   }
 

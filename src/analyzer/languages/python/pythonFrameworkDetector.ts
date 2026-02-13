@@ -7,7 +7,43 @@ export type PythonFrameworkType = 'django' | 'flask' | 'fastapi' | null;
 export interface PythonFrameworkInfo {
   type: PythonFrameworkType;
   entryPatterns: string[];
+  conventionalExports: string[];
 }
+
+const DJANGO_CONVENTIONAL_EXPORTS = [
+  // Views
+  'get', 'post', 'put', 'patch', 'delete', 'head', 'options',
+  'get_queryset', 'get_object', 'get_context_data', 'get_serializer_class',
+  'get_permissions', 'perform_create', 'perform_update', 'perform_destroy',
+  // Models
+  'Meta', 'save', 'clean', 'validate',
+  // Admin
+  'list_display', 'list_filter', 'search_fields', 'ordering',
+  'readonly_fields', 'fieldsets', 'inlines',
+  // URLs
+  'urlpatterns', 'app_name',
+  // Apps
+  'default_auto_field', 'name', 'verbose_name',
+  // Management commands
+  'handle', 'add_arguments',
+  // Middleware
+  'process_request', 'process_response', 'process_view',
+  // Signals
+  'ready',
+];
+
+const FLASK_CONVENTIONAL_EXPORTS = [
+  'create_app',
+  'init_app',
+  'register_blueprints',
+  'configure',
+];
+
+const FASTAPI_CONVENTIONAL_EXPORTS = [
+  'get_db', 'get_current_user', 'get_settings',
+  'lifespan',
+  'startup', 'shutdown',
+];
 
 const DJANGO_ENTRY_PATTERNS = [
   'manage.py',
@@ -87,7 +123,7 @@ export function detectPythonFramework(
 
   // Fallback: manage.py → Django
   if (fs.existsSync(path.join(rootDir, 'manage.py'))) {
-    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS };
+    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS, conventionalExports: DJANGO_CONVENTIONAL_EXPORTS };
   }
 
   return null;
@@ -96,13 +132,13 @@ export function detectPythonFramework(
 function detectFromRequirements(content: string): PythonFrameworkInfo | null {
   const lines = content.toLowerCase();
   if (/^django[=<>~!\s]/m.test(lines) || /^django$/m.test(lines)) {
-    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS };
+    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS, conventionalExports: DJANGO_CONVENTIONAL_EXPORTS };
   }
   if (/^flask[=<>~!\s]/m.test(lines) || /^flask$/m.test(lines)) {
-    return { type: 'flask', entryPatterns: FLASK_ENTRY_PATTERNS };
+    return { type: 'flask', entryPatterns: FLASK_ENTRY_PATTERNS, conventionalExports: FLASK_CONVENTIONAL_EXPORTS };
   }
   if (/^fastapi[=<>~!\s]/m.test(lines) || /^fastapi$/m.test(lines)) {
-    return { type: 'fastapi', entryPatterns: FASTAPI_ENTRY_PATTERNS };
+    return { type: 'fastapi', entryPatterns: FASTAPI_ENTRY_PATTERNS, conventionalExports: FASTAPI_CONVENTIONAL_EXPORTS };
   }
   return null;
 }
@@ -110,13 +146,13 @@ function detectFromRequirements(content: string): PythonFrameworkInfo | null {
 function detectFromPipfile(content: string): PythonFrameworkInfo | null {
   const lower = content.toLowerCase();
   if (lower.includes('django')) {
-    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS };
+    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS, conventionalExports: DJANGO_CONVENTIONAL_EXPORTS };
   }
   if (lower.includes('flask')) {
-    return { type: 'flask', entryPatterns: FLASK_ENTRY_PATTERNS };
+    return { type: 'flask', entryPatterns: FLASK_ENTRY_PATTERNS, conventionalExports: FLASK_CONVENTIONAL_EXPORTS };
   }
   if (lower.includes('fastapi')) {
-    return { type: 'fastapi', entryPatterns: FASTAPI_ENTRY_PATTERNS };
+    return { type: 'fastapi', entryPatterns: FASTAPI_ENTRY_PATTERNS, conventionalExports: FASTAPI_CONVENTIONAL_EXPORTS };
   }
   return null;
 }
@@ -124,13 +160,13 @@ function detectFromPipfile(content: string): PythonFrameworkInfo | null {
 function detectFromPyproject(content: string): PythonFrameworkInfo | null {
   const lower = content.toLowerCase();
   if (lower.includes('django')) {
-    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS };
+    return { type: 'django', entryPatterns: DJANGO_ENTRY_PATTERNS, conventionalExports: DJANGO_CONVENTIONAL_EXPORTS };
   }
   if (lower.includes('flask')) {
-    return { type: 'flask', entryPatterns: FLASK_ENTRY_PATTERNS };
+    return { type: 'flask', entryPatterns: FLASK_ENTRY_PATTERNS, conventionalExports: FLASK_CONVENTIONAL_EXPORTS };
   }
   if (lower.includes('fastapi')) {
-    return { type: 'fastapi', entryPatterns: FASTAPI_ENTRY_PATTERNS };
+    return { type: 'fastapi', entryPatterns: FASTAPI_ENTRY_PATTERNS, conventionalExports: FASTAPI_CONVENTIONAL_EXPORTS };
   }
   return null;
 }
@@ -154,4 +190,13 @@ export async function findPythonFrameworkEntryPoints(
   });
 
   return matched;
+}
+
+/**
+ * Returns conventional export names for the detected Python framework
+ */
+export function getPythonConventionalExports(rootDir: string): string[] {
+  const framework = detectPythonFramework(rootDir);
+  if (!framework) return [];
+  return framework.conventionalExports;
 }

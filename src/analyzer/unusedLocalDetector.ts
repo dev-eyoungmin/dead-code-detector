@@ -49,7 +49,7 @@ export function detectUnusedLocals(
           symbolName: local.name,
           line: local.line,
           column: local.column,
-          confidence: 'high', // Local symbol detection is very reliable
+          confidence: determineLocalConfidence(local, filePath),
           kind: mapToLocalKind(local.kind),
         });
       }
@@ -57,6 +57,38 @@ export function detectUnusedLocals(
   }
 
   return unusedLocals;
+}
+
+/**
+ * Determines confidence level for unused local detection.
+ * React hook results (set*, dispatch) in .tsx/.jsx are commonly intentionally unused.
+ */
+function determineLocalConfidence(
+  local: { name: string; kind: string },
+  filePath: string
+): 'high' | 'medium' | 'low' {
+  if (
+    (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) &&
+    local.kind === 'variable' &&
+    (/^set[A-Z]/.test(local.name) || local.name === 'dispatch')
+  ) {
+    return 'medium';
+  }
+
+  // Java serialVersionUID — required by Serializable, looks unused
+  if (filePath.endsWith('.java') && local.name === 'serialVersionUID') {
+    return 'low';
+  }
+
+  // Java logger fields — often referenced in framework-injected way
+  if (
+    filePath.endsWith('.java') &&
+    /^(?:logger|log|LOG|LOGGER)$/.test(local.name)
+  ) {
+    return 'medium';
+  }
+
+  return 'high';
 }
 
 /**
