@@ -276,6 +276,9 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       // Expo Router layouts
       'app/_layout.{tsx,ts,jsx,js}',
       'src/app/_layout.{tsx,ts,jsx,js}',
+      // Expo native modules
+      'modules/*/index.{ts,js}',
+      'modules/*/src/*.{ts,js}',
     ],
     conventionalExports: [
       'default',
@@ -409,4 +412,35 @@ export function getFrameworkConventionalExports(
     }
   }
   return Array.from(allExports);
+}
+
+/**
+ * Tooling/config file patterns that are always entry points regardless of framework
+ */
+const TOOLING_ENTRY_PATTERNS = [
+  'jest.config.*',
+  'jest.setup.*',
+  'vitest.config.*',
+  'babel.config.*',
+  'metro.config.*',
+  'webpack.config.*',
+  'rollup.config.*',
+  'vite.config.*',
+  'tailwind.config.*',
+  'postcss.config.*',
+  'next.config.*',
+  'app.config.*',
+];
+
+/**
+ * Finds tooling/config entry point files (framework-agnostic)
+ */
+export async function findToolingEntryPoints(rootDir: string): Promise<string[]> {
+  const matched = await fg(TOOLING_ENTRY_PATTERNS, {
+    cwd: rootDir,
+    absolute: true,
+    onlyFiles: true,
+    ignore: ['**/node_modules/**'],
+  });
+  return matched;
 }

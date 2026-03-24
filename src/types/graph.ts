@@ -23,6 +23,7 @@ export interface ImportSpecifier {
 
 export interface ExportInfo {
   name: string;
+  originalName?: string;
   isDefault: boolean;
   isReExport: boolean;
   reExportSource?: string;

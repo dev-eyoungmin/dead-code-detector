@@ -25,7 +25,7 @@ export function buildDependencyGraph(
     }
 
     const imports = collectImports(sourceFile, program);
-    const exports = collectExports(sourceFile);
+    const exports = collectExports(sourceFile, program);
     const locals = collectLocals(sourceFile, checker);
 
     const fileNode: FileNode = {
@@ -135,7 +135,7 @@ function resolveStarReExport(
     if (exp.name === '*' && exp.isReExport && exp.reExportSource) {
       // Find the resolved path for this re-export source via the file's imports
       for (const imp of file.imports) {
-        if (imp.source === exp.reExportSource && fileMap.has(imp.resolvedPath)) {
+        if ((imp.source === exp.reExportSource || imp.resolvedPath === exp.reExportSource) && fileMap.has(imp.resolvedPath)) {
           const key = makeExportKey(imp.resolvedPath, exportName);
           const usages = exportUsages.get(key);
           if (usages) {
