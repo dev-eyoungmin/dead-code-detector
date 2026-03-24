@@ -207,7 +207,7 @@ function resolveImportPath(
   if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
     const aliasResolved = resolveWithPathAlias(importPath, compilerOptions);
     if (aliasResolved) {
-      return aliasResolved;
+      return path.normalize(aliasResolved);
     }
     // Still not resolved → external module
     return importPath;
@@ -225,35 +225,7 @@ function resolvePathManually(
   containingFileDir: string
 ): string {
   const basePath = path.resolve(containingFileDir, importPath);
-
-  // Try exact path first
-  try {
-    if (fs.existsSync(basePath) && fs.statSync(basePath).isFile()) {
-      return basePath;
-    }
-  } catch {
-    // File may have been deleted or be inaccessible; continue with extension resolution
-  }
-
-  // Try with extensions
-  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.d.ts'];
-  for (const ext of extensions) {
-    const withExt = basePath + ext;
-    if (fs.existsSync(withExt)) {
-      return withExt;
-    }
-  }
-
-  // Try as directory with index files
-  for (const ext of extensions) {
-    const indexPath = path.join(basePath, `index${ext}`);
-    if (fs.existsSync(indexPath)) {
-      return indexPath;
-    }
-  }
-
-  // Return as-is if we couldn't resolve (might be external)
-  return importPath;
+  return tryResolveFile(basePath) ?? importPath;
 }
 
 /**
@@ -273,10 +245,12 @@ function resolveWithPathAlias(
   for (const [pattern, mappings] of Object.entries(paths)) {
     const starIndex = pattern.indexOf('*');
     if (starIndex === -1) {
-      // Exact match (no wildcard)
-      if (moduleName === pattern && mappings.length > 0) {
-        const resolved = tryResolveFile(path.resolve(baseUrl, mappings[0]));
-        if (resolved) return resolved;
+      // Exact match (no wildcard) — try all mappings
+      if (moduleName === pattern) {
+        for (const mapping of mappings) {
+          const resolved = tryResolveFile(path.resolve(baseUrl, mapping));
+          if (resolved) return resolved;
+        }
       }
       continue;
     }
@@ -285,6 +259,10 @@ function resolveWithPathAlias(
     const suffix = pattern.slice(starIndex + 1);
 
     if (moduleName.startsWith(prefix) && moduleName.endsWith(suffix)) {
+      // Guard: prefix + suffix must not exceed module name length
+      if (prefix.length + suffix.length > moduleName.length) {
+        continue;
+      }
       const matchedWildcard = moduleName.slice(
         prefix.length,
         moduleName.length - suffix.length
@@ -302,6 +280,8 @@ function resolveWithPathAlias(
   return undefined;
 }
 
+const RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.d.ts'];
+
 /**
  * Tries to resolve a file path with common TypeScript/JavaScript extensions
  * and index file conventions.
@@ -317,8 +297,7 @@ function tryResolveFile(basePath: string): string | undefined {
   }
 
   // Try with extensions
-  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.d.ts'];
-  for (const ext of extensions) {
+  for (const ext of RESOLVE_EXTENSIONS) {
     const withExt = basePath + ext;
     if (fs.existsSync(withExt)) {
       return withExt;
@@ -326,7 +305,7 @@ function tryResolveFile(basePath: string): string | undefined {
   }
 
   // Try as directory with index files
-  for (const ext of extensions) {
+  for (const ext of RESOLVE_EXTENSIONS) {
     const indexPath = path.join(basePath, `index${ext}`);
     if (fs.existsSync(indexPath)) {
       return indexPath;
