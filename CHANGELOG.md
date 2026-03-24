@@ -5,6 +5,28 @@ All notable changes to the **Dead Code Detector** extension will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-25
+
+### Added
+- **Flutter/Dart language support**: Full dead code detection for Dart projects with import/export/local collection, module resolution (`package:`, relative paths), and `part`/`part of` file merging
+- **Flutter framework detection**: Auto-detects Flutter from `pubspec.yaml`; recognizes entry points (`lib/main.dart`, test files, generated files), conventional exports (Widget lifecycle, serialization, routing, state management), and ignore patterns for generated files (`*.g.dart`, `*.freezed.dart`, etc.)
+- **Tooling entry points**: `jest.config.*`, `vitest.config.*`, `webpack.config.*`, `babel.config.*`, and other build tool config files are now automatically recognized as entry points regardless of framework
+- **Expo native module support**: `modules/*/index.ts` and `modules/*/src/*.ts` patterns added to Expo entry points
+
+### Fixed
+- **R-3: Path alias resolution** (~50+ false positives): Added `resolveWithPathAlias()` fallback when `ts.resolveModuleName()` fails for `@/` imports — manually matches tsconfig `paths` mappings with extension probing
+- **R-1: Barrel re-export propagation** (~84 false positives): `export { default as X } from './Y'` now propagates usage to the original source file's export via `propagateReExportUsage()` with multi-level chain support and circular guard
+- **R-2: Same-file export references** (~30 false positives): Exports used as field types, function parameters, or return types by other exports in the same file are no longer reported as unused (TypeChecker-based for TS, regex-based for other languages)
+- **R-4: Property access via default export** (~14 false positives): Named exports included as shorthand properties in the file's `export default { ... }` object receive `low` confidence when the default export is used
+- **Dart test/generated file confidence**: Dart test files (`*_test.dart`, `test/`) and generated files (`*.g.dart`, `*.freezed.dart`) receive `low` confidence
+
+### Changed
+- `ExportInfo` interface now includes optional `originalName` field for aliased re-exports
+- `SupportedLanguage` type extended with `'dart'`
+- `reExportSource` in `ExportInfo` now stores resolved absolute paths instead of raw module specifiers
+- Orchestrator flow: graph merge → re-export propagation → internal reference analysis → tooling entry points → detection
+- 61 new tests (359 → 420 total)
+
 ## [1.0.7] - 2026-02-13
 
 ### Added
