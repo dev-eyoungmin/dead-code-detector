@@ -167,7 +167,7 @@ No changes needed — propagation runs in `analyzer/index.ts` after merge.
 
 #### Python Impact
 
-Python `__init__.py` files with `from .module import X` are already collected with `isReExport: true`. The common `propagateReExportUsage()` in `graphBuilder.ts` handles them automatically.
+Python `__init__.py` files with `from .module import X` are already collected with `isReExport: true`. The common `propagateReExportUsage()` in `analyzer/index.ts` handles them automatically after graph merge.
 
 #### Go/Java Impact
 
