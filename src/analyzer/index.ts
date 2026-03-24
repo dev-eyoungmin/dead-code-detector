@@ -15,6 +15,7 @@ import { getFrameworkConventionalExports, findToolingEntryPoints } from './frame
 import { getPythonConventionalExports } from './languages/python/pythonFrameworkDetector';
 import { getJavaConventionalExports } from './languages/java/javaFrameworkDetector';
 import { getGoConventionalExports } from './languages/go/goFrameworkDetector';
+import { getDartConventionalExports, getDartIgnorePatterns, detectDartFramework } from './languages/dart/dartFrameworkDetector';
 
 /**
  * Options for running analysis
@@ -71,12 +72,24 @@ export async function analyze(
   markInternalReferencesRegex(mergedGraph);
 
   // Detect unused code
+  const dartFramework = detectDartFramework(options.rootDir);
   const frameworkExports = [
     ...getFrameworkConventionalExports(options.rootDir),
     ...getPythonConventionalExports(options.rootDir),
     ...getJavaConventionalExports(options.rootDir),
     ...getGoConventionalExports(options.rootDir),
+    ...getDartConventionalExports(dartFramework),
   ];
+
+  // Add Dart generated file patterns to ignore when Flutter detected
+  if (dartFramework === 'flutter') {
+    const dartIgnores = getDartIgnorePatterns();
+    if (!options.ignorePatterns) {
+      options.ignorePatterns = dartIgnores;
+    } else {
+      options.ignorePatterns = [...options.ignorePatterns, ...dartIgnores];
+    }
+  }
   // Merge tooling entry points (jest.config, vitest.config, etc.)
   const toolingEntries = await findToolingEntryPoints(options.rootDir);
   const allEntryPoints = [...new Set([...options.entryPoints, ...toolingEntries])];

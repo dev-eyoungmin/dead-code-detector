@@ -4,6 +4,7 @@ import { TypeScriptAnalyzer } from './typescriptAnalyzer';
 import { PythonAnalyzer } from './python/pythonAnalyzer';
 import { GoAnalyzer } from './go/goAnalyzer';
 import { JavaAnalyzer } from './java/javaAnalyzer';
+import { DartAnalyzer } from './dart/dartAnalyzer';
 
 const analyzers = new Map<SupportedLanguage, LanguageAnalyzer>();
 
@@ -13,6 +14,7 @@ function ensureInitialized(): void {
     analyzers.set('python', new PythonAnalyzer());
     analyzers.set('go', new GoAnalyzer());
     analyzers.set('java', new JavaAnalyzer());
+    analyzers.set('dart', new DartAnalyzer());
   }
 }
 
@@ -38,6 +40,7 @@ const extensionToLanguage = new Map<string, SupportedLanguage>([
   ['.py', 'python'],
   ['.go', 'go'],
   ['.java', 'java'],
+  ['.dart', 'dart'],
 ]);
 
 export function detectLanguage(filePath: string): SupportedLanguage | undefined {
