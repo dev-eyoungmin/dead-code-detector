@@ -1,11 +1,61 @@
 import * as ts from 'typescript';
+import * as path from 'path';
 import type { ExportInfo } from '../types';
 import type { ExportKind } from '../types/analysis';
 
 /**
+ * Resolves a module specifier to an absolute file path using TS resolver with manual fallback.
+ */
+function resolveModulePath(
+  moduleSpecifier: string,
+  sourceFile: ts.SourceFile,
+  program?: ts.Program
+): string | undefined {
+  if (!program) {
+    return undefined;
+  }
+
+  const compilerOptions = program.getCompilerOptions();
+  const sourceDir = path.dirname(sourceFile.fileName);
+
+  // Try TS resolver first
+  const resolved = ts.resolveModuleName(
+    moduleSpecifier,
+    sourceFile.fileName,
+    compilerOptions,
+    ts.sys
+  );
+
+  if (resolved.resolvedModule) {
+    return path.normalize(resolved.resolvedModule.resolvedFileName);
+  }
+
+  // Manual fallback: try common extensions
+  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.d.ts'];
+  const basePath = path.resolve(sourceDir, moduleSpecifier);
+
+  for (const ext of extensions) {
+    const candidate = basePath + ext;
+    if (ts.sys.fileExists(candidate)) {
+      return path.normalize(candidate);
+    }
+  }
+
+  // Try index files
+  for (const ext of extensions) {
+    const candidate = path.join(basePath, 'index' + ext);
+    if (ts.sys.fileExists(candidate)) {
+      return path.normalize(candidate);
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Collects all exports from a source file
  */
-export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
+export function collectExports(sourceFile: ts.SourceFile, program?: ts.Program): ExportInfo[] {
   const exports: ExportInfo[] = [];
 
   function visit(node: ts.Node): void {
@@ -69,6 +119,8 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
       if (exportDecl.moduleSpecifier && ts.isStringLiteral(exportDecl.moduleSpecifier)) {
         const reExportSource = exportDecl.moduleSpecifier.text;
 
+        const resolvedReExportSource = resolveModulePath(reExportSource, sourceFile, program) || reExportSource;
+
         if (exportDecl.exportClause) {
           if (ts.isNamedExports(exportDecl.exportClause)) {
             // export { x, y } from 'module'
@@ -76,11 +128,14 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
               const { line, character } =
                 sourceFile.getLineAndCharacterOfPosition(element.getStart());
 
+              const originalName = element.propertyName ? element.propertyName.text : undefined;
+
               exports.push({
                 name: element.name.text,
+                originalName,
                 isDefault: false,
                 isReExport: true,
-                reExportSource,
+                reExportSource: resolvedReExportSource,
                 line: line + 1,
                 column: character,
                 kind: 'unknown',
@@ -97,7 +152,7 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
               name: exportDecl.exportClause.name.text,
               isDefault: false,
               isReExport: true,
-              reExportSource,
+              reExportSource: resolvedReExportSource,
               line: line + 1,
               column: character,
               kind: 'unknown',
@@ -114,7 +169,7 @@ export function collectExports(sourceFile: ts.SourceFile): ExportInfo[] {
             name: '*',
             isDefault: false,
             isReExport: true,
-            reExportSource,
+            reExportSource: resolvedReExportSource,
             line: line + 1,
             column: character,
             kind: 'unknown',

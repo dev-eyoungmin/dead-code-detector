@@ -1,11 +1,13 @@
 import { minimatch } from 'minimatch';
 import type { AnalysisResult } from '../types/analysis';
+import type { DependencyGraph } from '../types/graph';
 import { createProgram } from './programFactory';
 import { buildDependencyGraph } from './dependencyGraph';
 import { detectUnusedFiles } from './unusedFileDetector';
 import { detectUnusedExports } from './unusedExportDetector';
 import { detectUnusedLocals } from './unusedLocalDetector';
 import { createEmptyGraph, mergeGraphInto } from './graphBuilder';
+import { makeExportKey } from './dependencyGraph';
 import { groupFilesByLanguage, getAnalyzer } from './languages';
 import { getFrameworkConventionalExports } from './frameworkDetector';
 import { getPythonConventionalExports } from './languages/python/pythonFrameworkDetector';
@@ -53,6 +55,9 @@ export async function analyze(
       mergeGraphInto(mergedGraph, graph);
     }
   }
+
+  // Propagate usage through re-export chains
+  propagateReExportUsage(mergedGraph);
 
   // Detect unused code
   const frameworkExports = [
@@ -135,6 +140,49 @@ export async function analyzeFile(
     unusedExports,
     unusedLocals,
   };
+}
+
+/**
+ * Propagates export usage through named re-export chains.
+ * When `export { default as X } from './Y'` is used, this ensures
+ * the original export in './Y' is also marked as used.
+ */
+function propagateReExportUsage(graph: DependencyGraph): void {
+  let changed = true;
+  const maxIterations = 10;
+  let iteration = 0;
+
+  while (changed && iteration < maxIterations) {
+    changed = false;
+    iteration++;
+
+    for (const [filePath, fileNode] of graph.files) {
+      for (const exp of fileNode.exports) {
+        if (!exp.isReExport || !exp.reExportSource) continue;
+
+        const reExportKey = makeExportKey(filePath, exp.name);
+        const usages = graph.exportUsages.get(reExportKey);
+        if (!usages || usages.size === 0) continue;
+
+        const originalName = exp.originalName || exp.name;
+        const sourceKey = makeExportKey(exp.reExportSource, originalName);
+
+        let sourceUsages = graph.exportUsages.get(sourceKey);
+        if (!sourceUsages) {
+          sourceUsages = new Set();
+          graph.exportUsages.set(sourceKey, sourceUsages);
+        }
+
+        const prevSize = sourceUsages.size;
+        for (const user of usages) {
+          sourceUsages.add(user);
+        }
+        if (sourceUsages.size > prevSize) {
+          changed = true;
+        }
+      }
+    }
+  }
 }
 
 // Re-export types and utilities
