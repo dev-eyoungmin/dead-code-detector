@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-24
 **Status**: Approved
-**Version**: 1.0
+**Version**: 1.1 (post-review)
 
 ---
 
@@ -47,13 +47,14 @@ Fix 5 root causes of false positives identified from real-world testing (Kurly B
 
 #### `importCollector.ts`
 
-Add new fallback step between `ts.resolveModuleName()` and `resolvePathManually()`:
+Add new fallback step. **Important**: In the current code, non-relative paths that fail TS resolution hit an early return that treats them as external modules (line ~206-209). The new fallback must be inserted BEFORE this early return:
 
 ```
 Resolution order:
 1. ts.resolveModuleName() (existing — handles paths if tsconfig is correct)
-2. NEW: resolveWithPathAlias(moduleName, paths, baseUrl)
-3. resolvePathManually() (existing — relative path fallback)
+2. NEW: resolveWithPathAlias(moduleName, paths, baseUrl) — BEFORE "non-relative = external" early return
+3. "non-relative = external" early return (existing, now only reached if step 2 also fails)
+4. resolvePathManually() (existing — relative path fallback)
 ```
 
 **`resolveWithPathAlias(moduleName, paths, baseUrl)`**:
@@ -82,11 +83,37 @@ When `import { IconDinner } from '@/assets/icons'` uses a barrel file that has `
 
 `resolveStarReExport()` only traces `export * from` chains, not named re-exports.
 
+### Prerequisite: Type Changes
+
+**`types/graph.ts`** — Add `originalName` field to `ExportInfo`:
+```typescript
+interface ExportInfo {
+  // ... existing fields ...
+  originalName?: string;  // NEW: original name before aliasing in re-exports
+}
+```
+
+This must be done FIRST as R-1 depends on it.
+
 ### Changes
 
-#### `graphBuilder.ts` — New `propagateReExportUsage()`
+#### `exportCollector.ts` — Capture `originalName` and resolve `reExportSource`
 
-After building the graph, propagate usage from re-exports to their sources:
+For aliased re-exports, capture the original name via `element.propertyName?.text`:
+- `export { default as X } from './Y'` → `name: 'X'`, `originalName: 'default'` (propertyName = 'default')
+- `export { Foo as Bar } from './Y'` → `name: 'Bar'`, `originalName: 'Foo'` (propertyName = 'Foo')
+- `export { X } from './Y'` → `name: 'X'`, `originalName: undefined` (no aliasing)
+
+**Critical**: Currently `reExportSource` stores the raw module specifier (e.g., `'./IconDinner'`), NOT a resolved absolute path. Since `exportUsages` keys use absolute paths, propagation would silently fail. Two options:
+
+- **Option A (chosen)**: Resolve `reExportSource` to absolute path during collection by passing the `program` to `collectExports()` and using the same resolution logic as `importCollector.ts`.
+- **Option B**: Resolve during propagation by looking up the file's imports to find the resolved path for a given specifier. More complex, less reliable.
+
+#### `analyzer/index.ts` — Run propagation on merged graph
+
+**Important**: `propagateReExportUsage()` runs in `analyzer/index.ts` AFTER `mergeGraphInto()` completes, operating on `mergedGraph.exportUsages` and `mergedGraph.files`. This ensures it works for ALL languages (TypeScript via `dependencyGraph.ts` AND Python/Go/Java via `graphBuilder.ts`) without duplicating logic in two places.
+
+#### New function: `propagateReExportUsage()`
 
 ```typescript
 function propagateReExportUsage(
@@ -136,13 +163,7 @@ function propagateReExportUsage(
 
 #### `dependencyGraph.ts`
 
-Call `propagateReExportUsage()` after the 2nd pass in `buildDependencyGraph()`.
-
-#### `exportCollector.ts`
-
-Ensure `ExportInfo` carries `originalName` for aliased re-exports:
-- `export { default as X } from './Y'` → `name: 'X'`, `originalName: 'default'`
-- `export { Foo as Bar } from './Y'` → `name: 'Bar'`, `originalName: 'Foo'`
+No changes needed — propagation runs in `analyzer/index.ts` after merge.
 
 #### Python Impact
 
@@ -173,9 +194,22 @@ Exported types/functions used only within the same file (as field types, paramet
 
 ### Changes
 
-#### TypeScript: `unusedExportDetector.ts`
+#### Execution Model
 
-Use Type Checker to find same-file references:
+`detectUnusedExports()` currently only receives `graph`, `entryPoints`, and `frameworkConventionalExports` — it has no access to `ts.Program`, `ts.SourceFile`, or `ts.TypeChecker`. The internal reference analysis runs as a **pre-pass in `analyzer/index.ts`** that mutates `exportUsages` BEFORE `detectUnusedExports()` is called:
+
+```typescript
+// analyzer/index.ts — after building mergedGraph, before detection
+if (tsProgram) {
+  analyzeInternalReferences(mergedGraph, tsProgram);  // mutates exportUsages
+}
+markInternalReferencesRegex(mergedGraph);  // regex-based for all languages
+// Then proceed to detectUnusedExports(mergedGraph, ...)
+```
+
+#### TypeScript: `analyzeInternalReferences()` (new function)
+
+Use Type Checker to find same-file references. Placed in a new file or in `unusedExportDetector.ts`:
 
 ```typescript
 function analyzeInternalReferences(
@@ -215,46 +249,59 @@ function analyzeInternalReferences(
 
 Key rule: An export is "internally used" only if it's referenced by another export that IS externally used. This prevents marking truly unused exports as used just because they reference each other.
 
-#### Python/Go/Java: `graphBuilder.ts` — Regex-based internal reference
+#### Python/Go/Java/Dart: `markInternalReferencesRegex()` — Regex-based internal reference
+
+Runs for ALL languages (including TypeScript files not covered by the checker-based pass).
 
 ```typescript
-function markInternalReferences(
-  fileNode: FileNode,
-  fileContent: string,
-  exportUsages: Map<string, Set<string>>
+function markInternalReferencesRegex(
+  graph: DependencyGraph
 ): void {
-  const exportNames = fileNode.exports.map(e => e.name);
-  const externallyUsed = new Set<string>();
+  for (const [filePath, fileNode] of graph.files) {
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    const externallyUsed = new Set<string>();
 
-  // Find which exports have external usage
-  for (const exp of fileNode.exports) {
-    const key = makeExportKey(fileNode.path, exp.name);
-    const usages = exportUsages.get(key);
-    if (usages && usages.size > 0) externallyUsed.add(exp.name);
-  }
+    // Find which exports have external usage
+    for (const exp of fileNode.exports) {
+      const key = makeExportKey(filePath, exp.name);
+      const usages = graph.exportUsages.get(key);
+      if (usages && usages.size > 0) externallyUsed.add(exp.name);
+    }
 
-  // For each unused export, check if referenced by an externally-used export
-  for (const exp of fileNode.exports) {
-    const key = makeExportKey(fileNode.path, exp.name);
-    const usages = exportUsages.get(key);
-    if (usages && usages.size > 0) continue; // already used
+    if (externallyUsed.size === 0) continue; // no anchor — skip file
 
-    // Count occurrences in file (excluding declaration line)
-    const regex = new RegExp(`\\b${escapeRegex(exp.name)}\\b`, 'g');
-    const matches = fileContent.match(regex);
-    const refCount = (matches?.length || 0) - 1; // subtract declaration
+    // Strip comments and string literals to avoid false matches
+    const strippedContent = stripCommentsAndStrings(fileContent);
 
-    if (refCount > 0 && externallyUsed.size > 0) {
-      // Conservative: if file has any externally-used export and this symbol
-      // is referenced elsewhere in the file, mark as internally used
-      if (!usages) {
-        exportUsages.set(key, new Set([fileNode.path]));
-      } else {
-        usages.add(fileNode.path);
+    for (const exp of fileNode.exports) {
+      const key = makeExportKey(filePath, exp.name);
+      const usages = graph.exportUsages.get(key);
+      if (usages && usages.size > 0) continue; // already used
+
+      // Skip short names (≤2 chars) — too many false matches
+      if (exp.name.length <= 2) continue;
+
+      // Count occurrences in stripped content (excluding declaration line)
+      const regex = new RegExp(`\\b${escapeRegex(exp.name)}\\b`, 'g');
+      const matches = strippedContent.match(regex);
+      const refCount = (matches?.length || 0) - 1; // subtract declaration
+
+      if (refCount > 0) {
+        if (!usages) {
+          graph.exportUsages.set(key, new Set([filePath]));
+        } else {
+          usages.add(filePath);
+        }
       }
     }
   }
 }
+```
+
+**Safeguards against false matches**:
+- `stripCommentsAndStrings()`: Remove single/multi-line comments and string literals before matching
+- Skip export names ≤2 characters (e.g., `id`, `of`) to avoid noise
+- Word boundary (`\b`) matching to prevent substring matches
 ```
 
 ### Tests
@@ -442,7 +489,15 @@ test/
 ### 7.1 Language Registration
 
 **`types/language.ts`**: Add `'dart'` to `SupportedLanguage` union
+
 **`languages/index.ts`**: Map `.dart` → `'dart'`, register `DartAnalyzer`
+
+**Wider impact of `SupportedLanguage` change**: Update all places that switch/match on this type:
+- `groupFilesByLanguage()` in `languages/index.ts` — add `.dart` extension mapping
+- `getAnalyzer()` in `languages/index.ts` — register `DartAnalyzer` instance
+- `unusedExportDetector.ts` confidence rules — add Dart-specific patterns
+- `unusedLocalDetector.ts` confidence rules — add Dart-specific patterns
+- VS Code language ID mapping in extension activation
 
 ### 7.2 dartImportCollector.ts
 
@@ -467,11 +522,11 @@ export 'src/utils.dart' show formatDate;           → re-export (selective)
 4. Relative path → resolve against containing file directory
 5. Extension: Dart always uses `.dart` explicitly, no extension guessing needed
 
-**Specifiers**:
-- No `show`/`hide` → namespace import (all public symbols)
-- `show X, Y` → specific specifiers `[{name: 'X'}, {name: 'Y'}]`
-- `hide X` → namespace import minus hidden (treat as namespace for simplicity)
-- `as foo` → `isNamespaceImport: true`, `alias: 'foo'`
+**Specifiers** (maps to existing `ImportInfo`/`ImportSpecifier` structures):
+- No `show`/`hide` → `isNamespaceImport: true`, specifiers: `[]`
+- `show X, Y` → `isNamespaceImport: false`, specifiers: `[{name: 'X', isDefault: false, isNamespace: false}, {name: 'Y', ...}]`
+- `hide X` → `isNamespaceImport: true`, specifiers: `[]` (treat as namespace for simplicity; hide list is not tracked)
+- `as foo` → `isNamespaceImport: true`, specifiers: `[{name: 'foo', isNamespace: true}]` (alias tracked at specifier level, matching existing `ImportSpecifier.alias` pattern)
 
 ### 7.3 dartExportCollector.ts
 
@@ -497,6 +552,7 @@ export 'path.dart' [show/hide]     → isReExport: true, reExportSource: resolve
 - Files with `part of` directive are NOT standalone — they belong to their parent library
 - Treat as part of the parent file (merge into parent's file node)
 - `part 'file.dart'` in parent → include file in parent's scope
+- **Unused file detector protection**: `part of` files are excluded from the file list passed to analyzers (filtered in `classifyDartFiles()`), so they won't appear as "unused files". Their symbols are merged into the parent library's `FileNode` instead.
 
 ### 7.4 dartLocalCollector.ts
 
@@ -675,9 +731,12 @@ class DartAnalyzer implements LanguageAnalyzer {
 | Step | Work | Files | Language Scope |
 |---|---|---|---|
 | 1 | R-3 Path Alias | programFactory.ts, importCollector.ts | TS |
-| 2 | R-1 Re-export Propagation | dependencyGraph.ts, graphBuilder.ts, exportCollector.ts | TS, Python |
-| 3 | R-2 Internal References | unusedExportDetector.ts, graphBuilder.ts | All |
+| 2a | R-1 Prerequisite: Add `originalName` to `ExportInfo` | types/graph.ts | All |
+| 2b | R-1 Capture originalName + resolve reExportSource | exportCollector.ts | TS |
+| 2c | R-1 Re-export propagation in orchestrator | analyzer/index.ts (new `propagateReExportUsage()`) | TS, Python |
+| 3a | R-2 TS internal references (pre-pass with TypeChecker) | analyzer/index.ts, new `internalReferenceAnalyzer.ts` | TS |
+| 3b | R-2 Regex-based internal references | analyzer/index.ts (new `markInternalReferencesRegex()`) | All |
 | 4 | R-5 Entry Points | frameworkDetector.ts, language FDs | All |
 | 5 | R-4 Property Access | unusedExportDetector.ts | TS, Python |
-| 6 | Flutter/Dart Support | 6 new files + registration | Dart |
+| 6 | Flutter/Dart Support | 6 new files + registration + type updates | Dart |
 | 7 | Phase B Refactoring | graphBuilder.ts architecture | All |
