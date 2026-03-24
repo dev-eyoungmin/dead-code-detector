@@ -67,7 +67,9 @@ export function detectUnusedExports(
         const confidence = determineConfidence(
           exportInfo,
           conventionalSet,
-          filePath
+          filePath,
+          fileNode,
+          graph.exportUsages
         );
 
         unusedExports.push({
@@ -97,11 +99,29 @@ function determineConfidence(
     kind: string;
   },
   conventionalExports: Set<string> = new Set(),
-  filePath: string = ''
+  filePath: string = '',
+  fileNode?: { exports: Array<{ name: string; isDefault: boolean }> },
+  exportUsages?: Map<string, Set<string>>
 ): 'high' | 'medium' | 'low' {
   // Framework conventional exports (e.g. getServerSideProps, loader)
   if (conventionalExports.has(exportInfo.name)) {
     return 'low';
+  }
+
+  // --- Property access pattern (R-4) ---
+  // If default export is used and this named export is a shorthand property
+  // in the default export object, it's likely accessed via defaultImport.prop
+  if (
+    fileNode && exportUsages &&
+    !exportInfo.isDefault && !exportInfo.isReExport
+  ) {
+    const defaultKey = `${filePath}::default`;
+    const defaultUsages = exportUsages.get(defaultKey);
+    if (defaultUsages && defaultUsages.size > 0) {
+      if (isNamedExportInDefaultObject(filePath, exportInfo.name)) {
+        return 'low';
+      }
+    }
   }
 
   // --- Python patterns ---
@@ -151,6 +171,22 @@ function determineConfidence(
       exportInfo.kind === 'enum'
     )
   ) {
+    return 'low';
+  }
+
+  // --- Dart patterns ---
+
+  // Dart test files
+  if (filePath.endsWith('.dart') && (
+    /_test\.dart$/.test(filePath) ||
+    /\/test\//.test(filePath) ||
+    /\/integration_test\//.test(filePath)
+  )) {
+    return 'low';
+  }
+
+  // Dart generated files (safety net if not already ignored)
+  if (/\.(g|freezed|gr|config|mocks)\.dart$/.test(filePath)) {
     return 'low';
   }
 
@@ -239,6 +275,29 @@ function determineConfidence(
 
   // Named exports from regular files
   return 'medium';
+}
+
+/**
+ * Checks if a named export appears as a shorthand property in the file's
+ * default export object literal (e.g., export default { mediumRegular, largeBold })
+ */
+function isNamedExportInDefaultObject(filePath: string, exportName: string): boolean {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const defaultExportMatch = content.match(/export\s+default\s+\{([^}]+)\}/);
+    if (!defaultExportMatch) return false;
+
+    const objectBody = defaultExportMatch[1];
+    const props = objectBody.split(',').map(p => p.trim());
+    return props.some(p => {
+      const trimmed = p.trim();
+      if (trimmed === exportName) return true;
+      if (trimmed.startsWith(exportName + ':')) return true;
+      return false;
+    });
+  } catch {
+    return false;
+  }
 }
 
 /**
