@@ -1,5 +1,6 @@
 import type { ExportInfo } from '../../../types';
 import type { ExportKind } from '../../../types/analysis';
+import { isPythonDIAnnotation } from '../../decoratorDetector';
 
 /**
  * Collects exports from a Python source file.
@@ -57,6 +58,7 @@ export function collectPythonExports(
           column: 0,
           kind: 'function',
           isTypeOnly: false,
+          isEntryPointDecorated: hasPythonDIDecorator(lines, i) || undefined,
         });
       }
       continue;
@@ -76,6 +78,7 @@ export function collectPythonExports(
           column: 0,
           kind: 'class',
           isTypeOnly: false,
+          isEntryPointDecorated: hasPythonDIDecorator(lines, i) || undefined,
         });
       }
       continue;
@@ -161,4 +164,28 @@ function getKindForName(name: string, lines: string[]): ExportKind {
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Checks whether any of the lines immediately preceding a class/function definition
+ * (i.e. decorator lines starting with @) match a known DI annotation pattern.
+ */
+function hasPythonDIDecorator(lines: string[], defLineIndex: number): boolean {
+  // Walk backwards from the definition line looking for decorator lines
+  for (let j = defLineIndex - 1; j >= 0; j--) {
+    const prevLine = lines[j].trim();
+    if (!prevLine.startsWith('@')) break; // stop at first non-decorator line
+    // Extract the annotation name (everything between @ and the first ( or space or end)
+    const annotMatch = prevLine.match(/^@([a-zA-Z_][\w.]*)/);
+    if (annotMatch) {
+      const fullName = annotMatch[1];
+      // Check the last segment (e.g. "inject.autoparams" → "autoparams", "inject" → "inject")
+      const segments = fullName.split('.');
+      for (const seg of segments) {
+        if (isPythonDIAnnotation(seg)) return true;
+      }
+      if (isPythonDIAnnotation(fullName)) return true;
+    }
+  }
+  return false;
 }

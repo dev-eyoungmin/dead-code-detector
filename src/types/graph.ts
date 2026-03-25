@@ -31,6 +31,8 @@ export interface ExportInfo {
   column: number;
   kind: string;
   isTypeOnly: boolean;
+  /** True when the export is decorated with a DI framework decorator (e.g. @injectable) */
+  isEntryPointDecorated?: boolean;
 }
 
 export interface LocalSymbolInfo {
