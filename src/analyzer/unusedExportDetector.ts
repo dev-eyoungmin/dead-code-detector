@@ -10,12 +10,26 @@ import { hasIgnoreComment, hasFileIgnoreComment } from '../utils/ignoreComment';
 export function detectUnusedExports(
   graph: DependencyGraph,
   entryPoints: string[],
-  frameworkConventionalExports: string[] = []
+  frameworkConventionalExports: string[] = [],
+  alwaysUsedPatterns: string[] = []
 ): UnusedExportResult[] {
   const entryPointSet = new Set(entryPoints);
   const conventionalSet = new Set(frameworkConventionalExports);
   const unusedExports: UnusedExportResult[] = [];
   const sourceCache = new Map<string, string>();
+
+  // Pre-compile alwaysUsedPatterns as regexes for fast matching
+  const alwaysUsedRegexes = alwaysUsedPatterns
+    .map((p) => {
+      try {
+        // Support simple glob * wildcards
+        const regexStr = p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+        return new RegExp(`^${regexStr}$`);
+      } catch {
+        return null;
+      }
+    })
+    .filter((r): r is RegExp => r !== null);
 
   for (const [filePath, fileNode] of Array.from(graph.files.entries())) {
     // Skip entry points - their exports are considered public API
@@ -61,6 +75,28 @@ export function detectUnusedExports(
         // Check @dead-code-ignore comment
         const src = getSource();
         if (src && hasIgnoreComment(src, exportInfo.line)) {
+          continue;
+        }
+
+        // DI-decorated exports are treated as entry points — assign low confidence
+        // so they don't appear with the default medium threshold
+        if (exportInfo.isEntryPointDecorated) {
+          unusedExports.push({
+            filePath,
+            exportName: exportInfo.name,
+            line: exportInfo.line,
+            column: exportInfo.column,
+            confidence: 'low',
+            kind: mapToExportKind(exportInfo.kind),
+          });
+          continue;
+        }
+
+        // alwaysUsedPatterns — skip entirely (not reported at any confidence)
+        if (
+          alwaysUsedRegexes.length > 0 &&
+          alwaysUsedRegexes.some((r) => r.test(exportInfo.name))
+        ) {
           continue;
         }
 

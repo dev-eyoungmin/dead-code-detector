@@ -5,11 +5,16 @@ import { collectExports } from './exportCollector';
 import { collectLocals } from './localSymbolCollector';
 
 /**
- * Builds a dependency graph from the analyzed files
+ * Builds a dependency graph from the analyzed files.
+ * @param userDecorators - Additional DI decorator names from user configuration.
+ * @param containerFilePaths - Absolute paths of DI container files whose imports
+ *   should all be treated as "used" (marks all exports of imported modules as used).
  */
 export function buildDependencyGraph(
   files: string[],
-  program: ts.Program
+  program: ts.Program,
+  userDecorators: string[] = [],
+  containerFilePaths: Set<string> = new Set()
 ): DependencyGraph {
   const fileMap = new Map<string, FileNode>();
   const inboundEdges = new Map<string, Set<string>>();
@@ -25,7 +30,7 @@ export function buildDependencyGraph(
     }
 
     const imports = collectImports(sourceFile, program);
-    const exports = collectExports(sourceFile, program);
+    const exports = collectExports(sourceFile, program, userDecorators);
     const locals = collectLocals(sourceFile, checker);
 
     const fileNode: FileNode = {
@@ -50,6 +55,9 @@ export function buildDependencyGraph(
 
   // Second pass: build edges and track export usages
   for (const [filePath, fileNode] of Array.from(fileMap.entries())) {
+    // Container files: treat ALL imports as namespace imports (all exports used)
+    const isContainerFile = containerFilePaths.has(filePath);
+
     for (const importInfo of fileNode.imports) {
       const resolvedPath = importInfo.resolvedPath;
 
@@ -68,8 +76,8 @@ export function buildDependencyGraph(
         continue;
       }
 
-      if (importInfo.isNamespaceImport) {
-        // For namespace imports (import * as X), mark ALL exports as used
+      if (importInfo.isNamespaceImport || isContainerFile) {
+        // For namespace imports (import * as X) or container files, mark ALL exports as used
         for (const exp of targetFile.exports) {
           const key = makeExportKey(resolvedPath, exp.name);
           const usages = exportUsages.get(key);

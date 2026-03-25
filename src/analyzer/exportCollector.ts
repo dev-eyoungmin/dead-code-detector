@@ -2,6 +2,7 @@ import * as ts from 'typescript';
 import * as path from 'path';
 import type { ExportInfo } from '../types';
 import type { ExportKind } from '../types/analysis';
+import { isEntryPointDecorator } from './decoratorDetector';
 
 /**
  * Resolves a module specifier to an absolute file path using TS resolver with manual fallback.
@@ -53,9 +54,15 @@ function resolveModulePath(
 }
 
 /**
- * Collects all exports from a source file
+ * Collects all exports from a source file.
+ * @param userDecorators - Additional decorator names (without @) from user config that
+ *   mark a class/function as a DI entry point.
  */
-export function collectExports(sourceFile: ts.SourceFile, program?: ts.Program): ExportInfo[] {
+export function collectExports(
+  sourceFile: ts.SourceFile,
+  program?: ts.Program,
+  userDecorators: string[] = []
+): ExportInfo[] {
   const exports: ExportInfo[] = [];
 
   function visit(node: ts.Node): void {
@@ -68,6 +75,7 @@ export function collectExports(sourceFile: ts.SourceFile, program?: ts.Program):
     if (hasExportModifier(node)) {
       const isDefault = hasDefaultModifier(node);
       const declarations = getDeclarations(node);
+      const decorated = hasEntryPointDecorator(node, userDecorators);
       for (const decl of declarations) {
         let position: number;
         if (decl.name === null) {
@@ -87,6 +95,7 @@ export function collectExports(sourceFile: ts.SourceFile, program?: ts.Program):
           column: character,
           kind: isDefault ? 'default' : getExportKind(node),
           isTypeOnly: isTypeOnlyExport(node),
+          isEntryPointDecorated: decorated || undefined,
         });
       }
     }
@@ -297,6 +306,38 @@ function getExportKind(node: ts.Node): ExportKind {
     return 'variable';
   }
   return 'unknown';
+}
+
+/**
+ * Returns true when a node is decorated with at least one DI entry-point decorator.
+ * Supports both `@decorator` (identifier) and `@decorator()` (call expression) forms.
+ */
+function hasEntryPointDecorator(node: ts.Node, userDecorators: string[]): boolean {
+  if (!ts.canHaveDecorators(node)) {
+    return false;
+  }
+  const decorators = ts.getDecorators(node);
+  if (!decorators || decorators.length === 0) {
+    return false;
+  }
+  return decorators.some((decorator) => {
+    const expr = decorator.expression;
+    let name = '';
+    if (ts.isCallExpression(expr) && ts.isIdentifier(expr.expression)) {
+      // @injectable()
+      name = expr.expression.text;
+    } else if (ts.isIdentifier(expr)) {
+      // @Injectable
+      name = expr.text;
+    } else if (
+      ts.isPropertyAccessExpression(expr) &&
+      ts.isIdentifier(expr.name)
+    ) {
+      // @di.injectable
+      name = expr.name.text;
+    }
+    return name ? isEntryPointDecorator(name, userDecorators) : false;
+  });
 }
 
 /**

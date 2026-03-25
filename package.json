@@ -186,6 +186,24 @@
             "java"
           ],
           "description": "Languages to include in dead code analysis"
+        },
+        "deadCodeDetector.entryPointDecorators": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional decorator/annotation names (without @) that mark a class or function as a DI entry point (e.g. [\"MyCustomDecorator\"]). Built-in DI decorators (injectable, Injectable, singleton, Service, Component, etc.) are recognized automatically."
+        },
+        "deadCodeDetector.containerFiles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Glob patterns for DI container registration files. All imports in these files are treated as used (e.g. [\"**/container.ts\", \"**/di.ts\"])."
+        },
+        "deadCodeDetector.alwaysUsedPatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Export name glob patterns that are always considered used and will not be reported as dead code (e.g. [\"*Repository\", \"*Service\"])."
         }
       }
     }

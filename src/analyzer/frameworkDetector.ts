@@ -414,6 +414,158 @@ export function getFrameworkConventionalExports(
   return Array.from(allExports);
 }
 
+// ---------------------------------------------------------------------------
+// P4: Framework-Specific DI Container File Auto-Detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-DI-framework patterns used to detect container/registration files.
+ * Each entry describes content patterns that, if found, mark a file as a
+ * DI container so all its imports are treated as "used".
+ */
+interface DIFrameworkPattern {
+  /** Human-readable framework name */
+  name: string;
+  /** Regexes matched against file content to confirm it is a container file */
+  contentPatterns: RegExp[];
+}
+
+const DI_FRAMEWORK_PATTERNS: DIFrameworkPattern[] = [
+  {
+    name: 'inversify',
+    contentPatterns: [
+      /new\s+Container\s*\(/,
+      /\.bind\s*\(.*\)\s*\.to\s*\(/,
+    ],
+  },
+  {
+    name: 'nestjs',
+    contentPatterns: [
+      /@Module\s*\(\s*\{/,
+    ],
+  },
+  {
+    name: 'angular',
+    contentPatterns: [
+      /@NgModule\s*\(\s*\{/,
+    ],
+  },
+  {
+    name: 'tsyringe',
+    contentPatterns: [
+      /container\.register\s*\(/,
+      /container\.registerSingleton\s*\(/,
+    ],
+  },
+  {
+    name: 'awilix',
+    contentPatterns: [
+      /createContainer\s*\(/,
+      /container\.register\s*\(/,
+    ],
+  },
+  {
+    name: 'spring',
+    contentPatterns: [
+      /@Configuration\b/,
+      /@Bean\b/,
+    ],
+  },
+  {
+    name: 'guice',
+    contentPatterns: [
+      /extends\s+AbstractModule\b/,
+      /bind\s*\(.*\)\s*\.to\s*\(/,
+    ],
+  },
+  {
+    name: 'dagger',
+    contentPatterns: [
+      /@dagger\.Module\b/,
+      /@Module\b/,
+      /@Provides\b/,
+      /@Binds\b/,
+    ],
+  },
+  {
+    name: 'getIt',
+    contentPatterns: [
+      /configureDependencies\s*\(/,
+      /GetIt\.instance\b/,
+      /getIt\.registerFactory\b/,
+      /getIt\.registerSingleton\b/,
+      /getIt\.registerLazySingleton\b/,
+    ],
+  },
+  {
+    name: 'python-dependency-injector',
+    contentPatterns: [
+      /class\s+\w+\s*\(\s*containers\.DeclarativeContainer\s*\)/,
+      /from\s+dependency_injector\s+import/,
+    ],
+  },
+  // Go: wire / uber-fx dependency injection
+  {
+    name: 'wire',
+    contentPatterns: [
+      /wire\.Build\s*\(/,
+      /wire\.NewSet\s*\(/,
+    ],
+  },
+  {
+    name: 'uber-fx',
+    contentPatterns: [
+      /fx\.Provide\s*\(/,
+      /fx\.Module\s*\(/,
+    ],
+  },
+  // Dart: GetIt service locator
+  {
+    name: 'getIt-setup',
+    contentPatterns: [
+      /getIt\.registerFactory\s*[<(]/,
+      /getIt\.registerSingleton\s*[<(]/,
+      /getIt\.registerLazySingleton\s*[<(]/,
+      /sl\.registerFactory\s*[<(]/,
+      /sl\.registerSingleton\s*[<(]/,
+    ],
+  },
+];
+
+/**
+ * Detects whether a file is a DI container/registration file by scanning its
+ * content for framework-specific patterns.
+ */
+export function isDIContainerFile(content: string): boolean {
+  for (const framework of DI_FRAMEWORK_PATTERNS) {
+    // Need at least one content pattern to match
+    if (framework.contentPatterns.some((re) => re.test(content))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Scans a list of file paths and returns those that are DI container files
+ * based on their content patterns.
+ */
+export async function findDIContainerFiles(files: string[]): Promise<string[]> {
+  const result: string[] = [];
+  for (const filePath of files) {
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    if (isDIContainerFile(content)) {
+      result.push(filePath);
+    }
+  }
+  return result;
+}
+
 /**
  * Tooling/config file patterns that are always entry points regardless of framework
  */

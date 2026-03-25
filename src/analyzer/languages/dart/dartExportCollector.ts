@@ -1,5 +1,6 @@
 import type { ExportInfo } from '../../../types';
 import { resolveDartImport } from './dartModuleResolver';
+import { isDartDIAnnotation } from '../../decoratorDetector';
 
 /**
  * Collects public (exported) symbols from a Dart source file.
@@ -41,7 +42,7 @@ export function collectDartExports(
     // Class (including abstract)
     m = trimmed.match(/^(?:abstract\s+)?class\s+([A-Za-z_]\w*)/);
     if (m && !m[1].startsWith('_')) {
-      exports.push({ name: m[1], isDefault: false, isReExport: false, line: i + 1, column: 0, kind: 'class', isTypeOnly: false });
+      exports.push({ name: m[1], isDefault: false, isReExport: false, line: i + 1, column: 0, kind: 'class', isTypeOnly: false, isEntryPointDecorated: hasDartDIAnnotation(lines, i) || undefined });
       continue;
     }
 
@@ -140,4 +141,19 @@ export function collectDartExports(
  */
 export function isPartFile(content: string): boolean {
   return /^part\s+of\s+/m.test(content);
+}
+
+/**
+ * Checks whether lines preceding a Dart class definition contain a known DI annotation
+ * (e.g. @injectable, @lazySingleton, @singleton).
+ */
+function hasDartDIAnnotation(lines: string[], defLineIndex: number): boolean {
+  for (let j = defLineIndex - 1; j >= 0; j--) {
+    const prevLine = lines[j].trim();
+    if (prevLine === '') continue;
+    if (!prevLine.startsWith('@')) break;
+    const match = prevLine.match(/^@([A-Za-z_]\w*)/);
+    if (match && isDartDIAnnotation(match[1])) return true;
+  }
+  return false;
 }

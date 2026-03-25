@@ -1,4 +1,5 @@
 import type { ExportInfo } from '../../../types';
+import { isJavaDIAnnotation } from '../../decoratorDetector';
 
 /**
  * Collects exported (public) symbols from a Java source file.
@@ -50,6 +51,7 @@ export function collectJavaExports(
         column: 0,
         kind: 'class',
         isTypeOnly: false,
+        isEntryPointDecorated: hasJavaDIAnnotation(lines, i) || undefined,
       });
       continue;
     }
@@ -68,6 +70,7 @@ export function collectJavaExports(
         column: 0,
         kind: 'interface',
         isTypeOnly: false,
+        isEntryPointDecorated: hasJavaDIAnnotation(lines, i) || undefined,
       });
       continue;
     }
@@ -133,4 +136,21 @@ export function collectJavaExports(
   }
 
   return exports;
+}
+
+/**
+ * Checks whether any of the lines preceding a class/interface definition
+ * contain a DI annotation (e.g. @Inject, @Component, @Service).
+ */
+function hasJavaDIAnnotation(lines: string[], defLineIndex: number): boolean {
+  for (let j = defLineIndex - 1; j >= 0; j--) {
+    const prevLine = lines[j].trim();
+    // Allow annotation lines and blank lines between annotations
+    if (prevLine === '') continue;
+    if (!prevLine.startsWith('@')) break;
+    // Extract annotation name: @AnnotationName or @AnnotationName(...)
+    const match = prevLine.match(/^@([A-Za-z_]\w*)/);
+    if (match && isJavaDIAnnotation(match[1])) return true;
+  }
+  return false;
 }

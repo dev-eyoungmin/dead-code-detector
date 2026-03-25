@@ -1,5 +1,6 @@
 import * as ts from 'typescript';
 import * as fs from 'fs';
+import * as path from 'path';
 import { minimatch } from 'minimatch';
 import type { AnalysisResult } from '../types/analysis';
 import type { DependencyGraph } from '../types/graph';
@@ -11,7 +12,7 @@ import { detectUnusedLocals } from './unusedLocalDetector';
 import { createEmptyGraph, mergeGraphInto } from './graphBuilder';
 import { makeExportKey } from './dependencyGraph';
 import { groupFilesByLanguage, getAnalyzer } from './languages';
-import { getFrameworkConventionalExports, findToolingEntryPoints } from './frameworkDetector';
+import { getFrameworkConventionalExports, findToolingEntryPoints, findDIContainerFiles } from './frameworkDetector';
 import { getPythonConventionalExports } from './languages/python/pythonFrameworkDetector';
 import { getJavaConventionalExports } from './languages/java/javaFrameworkDetector';
 import { getGoConventionalExports } from './languages/go/goFrameworkDetector';
@@ -31,6 +32,12 @@ export interface AnalyzeOptions {
   tsconfigPath?: string;
   /** Glob patterns for files to ignore in results */
   ignorePatterns?: string[];
+  /** Additional decorator names (without @) that mark a class/function as DI entry point */
+  entryPointDecorators?: string[];
+  /** Glob patterns for DI container files — all their imports are treated as used */
+  containerFiles?: string[];
+  /** Export name glob patterns that are always considered used */
+  alwaysUsedPatterns?: string[];
 }
 
 /**
@@ -45,12 +52,28 @@ export async function analyze(
   const mergedGraph = createEmptyGraph();
   let tsProgram: ts.Program | undefined;
 
+  const userDecorators = options.entryPointDecorators ?? [];
+
+  // Resolve containerFiles patterns to absolute file paths (user-configured)
+  const userContainerFilePaths = resolveContainerFiles(
+    options.files,
+    options.containerFiles ?? [],
+    options.rootDir
+  );
+
+  // Auto-detect DI container files by content pattern analysis (P4)
+  const autoDetectedContainerFiles = await findDIContainerFiles(options.files);
+  const containerFilePaths = new Set([
+    ...userContainerFilePaths,
+    ...autoDetectedContainerFiles,
+  ]);
+
   for (const [language, files] of filesByLanguage) {
     if (language === 'typescript') {
       // For TypeScript, use the direct path for backward compatibility
       const program = createProgram(files, options.tsconfigPath);
       tsProgram = program; // save reference for internal reference analysis
-      const graph = buildDependencyGraph(files, program);
+      const graph = buildDependencyGraph(files, program, userDecorators, containerFilePaths);
       mergeGraphInto(mergedGraph, graph);
     } else {
       const analyzer = getAnalyzer(language);
@@ -61,6 +84,11 @@ export async function analyze(
       mergeGraphInto(mergedGraph, graph);
     }
   }
+
+  // Apply container file rules post-merge (covers all languages)
+  // TypeScript already handles this during buildDependencyGraph, but applying
+  // post-merge ensures non-TS languages (Python, Go, Java, Dart) are also covered.
+  applyContainerFileRules(mergedGraph, containerFilePaths);
 
   // Propagate usage through re-export chains
   propagateReExportUsage(mergedGraph);
@@ -98,7 +126,8 @@ export async function analyze(
   let unusedExports = detectUnusedExports(
     mergedGraph,
     allEntryPoints,
-    frameworkExports
+    frameworkExports,
+    options.alwaysUsedPatterns ?? []
   );
   let unusedLocals = detectUnusedLocals(mergedGraph);
 
@@ -385,6 +414,70 @@ function stripCommentsAndStrings(content: string): string {
  */
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Applies container file rules to the merged graph after all language graphs
+ * have been built and merged. For each container file, marks all exports of
+ * every module it imports as "used".
+ *
+ * This is the language-agnostic equivalent of the TypeScript-specific logic in
+ * buildDependencyGraph and covers Python, Go, Java, Dart container files.
+ */
+function applyContainerFileRules(
+  graph: DependencyGraph,
+  containerFilePaths: Set<string>
+): void {
+  for (const containerPath of containerFilePaths) {
+    const fileNode = graph.files.get(containerPath);
+    if (!fileNode) continue;
+
+    for (const importInfo of fileNode.imports) {
+      const resolvedPath = importInfo.resolvedPath;
+      const targetFile = graph.files.get(resolvedPath);
+      if (!targetFile) continue;
+
+      // Mark all exports of the imported module as used by this container file
+      for (const exp of targetFile.exports) {
+        const key = makeExportKey(resolvedPath, exp.name);
+        const usages = graph.exportUsages.get(key);
+        if (usages) {
+          usages.add(containerPath);
+        } else {
+          graph.exportUsages.set(key, new Set([containerPath]));
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Resolves containerFiles glob patterns to the set of absolute file paths
+ * from the files being analyzed.
+ */
+function resolveContainerFiles(
+  analyzedFiles: string[],
+  containerPatterns: string[],
+  rootDir: string
+): Set<string> {
+  if (containerPatterns.length === 0) return new Set();
+
+  const result = new Set<string>();
+  for (const filePath of analyzedFiles) {
+    // Test against both the absolute path and the path relative to rootDir
+    const relative = path.relative(rootDir, filePath).replace(/\\/g, '/');
+    const matches = containerPatterns.some(
+      (pattern) =>
+        minimatch(filePath, pattern, { matchBase: true }) ||
+        minimatch(relative, pattern, { matchBase: true }) ||
+        minimatch(filePath, pattern) ||
+        minimatch(relative, pattern)
+    );
+    if (matches) {
+      result.add(filePath);
+    }
+  }
+  return result;
 }
 
 // Re-export types and utilities
