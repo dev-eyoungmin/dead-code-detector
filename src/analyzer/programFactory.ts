@@ -1,130 +1,221 @@
 import * as ts from 'typescript';
 import * as path from 'path';
 import * as fs from 'fs';
+import { isSfcFile, sfcExtension, extractSfcScript } from './sfc';
+
+/** One TypeScript program plus the files it was created for. */
+export interface ProgramGroup {
+  program: ts.Program;
+  files: string[];
+  /** tsconfig.json the group's compiler options came from, if any */
+  configPath?: string;
+}
 
 interface ProgramCache {
   program: ts.Program;
   files: Set<string>;
 }
 
-let cachedProgram: ProgramCache | null = null;
+/** Keyed by tsconfig path, or by `<default>:<rootDir>` for the config-less group. */
+const programCache = new Map<string, ProgramCache>();
+
+const DEFAULT_GROUP_PREFIX = '<default>:';
 
 /**
- * Creates a TypeScript program for analysis.
- * Attempts to find and use tsconfig.json for compiler options.
- * Caches the program for incremental reuse.
+ * Creates one TypeScript program per tsconfig.json that governs the given files.
+ *
+ * A monorepo usually has a tsconfig per package, each with its own `paths`
+ * mapping. A single program can only apply one of them, so files are grouped by
+ * the nearest tsconfig.json found by walking up from the file's directory to
+ * `rootDir` (inclusive). Files with no tsconfig between them and `rootDir` share
+ * one default-options group.
+ *
+ * When `tsconfigPath` is given explicitly it wins and a single group is created.
  */
-export function createProgram(
+export function createPrograms(
   files: string[],
+  rootDir: string,
   tsconfigPath?: string
-): ts.Program {
-  const filesSet = new Set(files);
+): ProgramGroup[] {
+  const explicitConfig =
+    tsconfigPath && fs.existsSync(tsconfigPath) ? tsconfigPath : undefined;
 
-  const { options, configFilePath } = getCompilerOptions(
-    files,
-    tsconfigPath
-  );
+  // Preserve input order so groups are stable between runs.
+  const groups = new Map<string, { configPath?: string; files: string[] }>();
 
-  // Create program with oldProgram for incremental analysis
-  const program = ts.createProgram({
-    rootNames: files,
-    options,
-    oldProgram: cachedProgram?.program,
-    configFileParsingDiagnostics: configFilePath
-      ? ts.getConfigFileParsingDiagnostics(
-          ts.getParsedCommandLineOfConfigFile(
-            configFilePath,
-            {},
-            ts.sys as unknown as ts.ParseConfigFileHost
-          )!
-        )
-      : undefined,
-  });
-
-  // Cache the new program
-  cachedProgram = {
-    program,
-    files: filesSet,
-  };
-
-  return program;
-}
-
-/**
- * Clears the cached program, forcing a fresh analysis next time
- */
-export function clearProgramCache(): void {
-  cachedProgram = null;
-}
-
-/**
- * Gets compiler options by attempting to find tsconfig.json or using defaults
- */
-function getCompilerOptions(
-  files: string[],
-  tsconfigPath?: string
-): { options: ts.CompilerOptions; configFilePath?: string } {
-  let configFilePath: string | undefined;
-
-  // If tsconfig path explicitly provided, use it
-  if (tsconfigPath && fs.existsSync(tsconfigPath)) {
-    configFilePath = tsconfigPath;
-  } else if (files.length > 0) {
-    // Try to find tsconfig.json in the directory of the first file
-    const firstFileDir = path.dirname(files[0]);
-    configFilePath = findTsConfig(firstFileDir);
+  if (explicitConfig || files.length === 0) {
+    groups.set(explicitConfig ?? DEFAULT_GROUP_PREFIX + rootDir, {
+      configPath: explicitConfig,
+      files: [...files],
+    });
+  } else {
+    for (const file of files) {
+      const configPath = findNearestTsConfig(path.dirname(file), rootDir);
+      const key = configPath ?? DEFAULT_GROUP_PREFIX + rootDir;
+      const group = groups.get(key);
+      if (group) {
+        group.files.push(file);
+      } else {
+        groups.set(key, { configPath, files: [file] });
+      }
+    }
   }
 
-  if (configFilePath) {
-    const configFile = ts.readConfigFile(configFilePath, ts.sys.readFile);
+  const result: ProgramGroup[] = [];
+  for (const [key, group] of groups) {
+    const options = resolveCompilerOptions(group.configPath);
+    const host = createSfcAwareHost(options);
+    const program = ts.createProgram({
+      rootNames: group.files,
+      options,
+      host,
+      oldProgram: programCache.get(key)?.program,
+    });
+    programCache.set(key, { program, files: new Set(group.files) });
+    result.push({ program, files: group.files, configPath: group.configPath });
+  }
+
+  return result;
+}
+
+/**
+ * Creates a single TypeScript program for one self-contained set of files.
+ * Prefer createPrograms() for whole projects.
+ *
+ * Without an explicit `tsconfigPath` this looks for a tsconfig.json in
+ * `path.dirname(files[0])` and nowhere else: that directory doubles as the
+ * rootDir, and the search stops at rootDir. It does not walk up towards the
+ * filesystem root. Callers that need a config from an ancestor directory must
+ * pass `tsconfigPath`, or use createPrograms() with the real workspace root.
+ */
+export function createProgram(files: string[], tsconfigPath?: string): ts.Program {
+  const rootDir = path.dirname(files[0] ?? '.');
+  return createPrograms(files, rootDir, tsconfigPath)[0].program;
+}
+
+/** Clears every cached program, forcing a fresh analysis next time. */
+export function clearProgramCache(): void {
+  programCache.clear();
+}
+
+/**
+ * Walks up from `startDir` towards `rootDir` (inclusive) looking for a
+ * tsconfig.json. Never leaves the workspace: a config above `rootDir` belongs to
+ * a different project and must not shape this analysis.
+ */
+function findNearestTsConfig(startDir: string, rootDir: string): string | undefined {
+  const root = path.normalize(rootDir).replace(/[/\\]+$/, '');
+  let current = path.normalize(startDir);
+
+  while (current === root || current.startsWith(root + path.sep)) {
+    const candidate = path.join(current, 'tsconfig.json');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    if (current === root) {
+      return undefined;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return undefined;
+    }
+    current = parent;
+  }
+
+  return undefined;
+}
+
+/**
+ * Reads the group's compiler options from its tsconfig.json, falling back to
+ * defaults that accept both JS and TS. SFC files carry a non-TS extension, so
+ * `allowNonTsExtensions` is always required.
+ */
+function resolveCompilerOptions(configPath?: string): ts.CompilerOptions {
+  if (configPath) {
+    const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
     if (!configFile.error) {
-      const parsedConfig = ts.parseJsonConfigFileContent(
+      const parsed = ts.parseJsonConfigFileContent(
         configFile.config,
         ts.sys,
-        path.dirname(configFilePath)
+        path.dirname(configPath)
       );
       return {
-        options: {
-          ...parsedConfig.options,
-          noEmit: true, // We're only analyzing, not emitting
-        },
-        configFilePath,
+        ...parsed.options,
+        allowJs: parsed.options.allowJs ?? true,
+        allowNonTsExtensions: true,
+        noEmit: true,
       };
     }
   }
 
-  // Default compiler options that support both JS and TS
   return {
-    options: {
-      target: ts.ScriptTarget.ES2020,
-      module: ts.ModuleKind.ESNext,
-      allowJs: true,
-      checkJs: false,
-      jsx: ts.JsxEmit.React,
-      moduleResolution: ts.ModuleResolutionKind.NodeJs,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      forceConsistentCasingInFileNames: true,
-      resolveJsonModule: true,
-      noEmit: true,
-    },
+    target: ts.ScriptTarget.ES2020,
+    module: ts.ModuleKind.ESNext,
+    allowJs: true,
+    checkJs: false,
+    jsx: ts.JsxEmit.React,
+    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    esModuleInterop: true,
+    skipLibCheck: true,
+    forceConsistentCasingInFileNames: true,
+    resolveJsonModule: true,
+    allowNonTsExtensions: true,
+    noEmit: true,
   };
 }
 
 /**
- * Recursively searches for tsconfig.json starting from the given directory
+ * A compiler host that presents `.vue`/`.svelte` files as TypeScript: their
+ * script blocks are lifted out and everything else is blanked, so positions
+ * reported by the compiler still match the original file.
+ *
+ * Only `readFile` and `getSourceFile` are overridden. `fileExists` deliberately
+ * is not: SFCs keep their real on-disk paths here (nothing is rewritten to a
+ * virtual `App.vue.ts`), so the default host already answers correctly for them
+ * and an override would be an identity wrapper. If SFCs are ever mapped to
+ * synthetic paths, `fileExists` — and `realpath`/`getCanonicalFileName` with it —
+ * must be overridden at the same time.
  */
-function findTsConfig(startDir: string): string | undefined {
-  let currentDir = startDir;
-  const root = path.parse(currentDir).root;
+function createSfcAwareHost(options: ts.CompilerOptions): ts.CompilerHost {
+  const host = ts.createCompilerHost(options, true);
+  const baseReadFile = host.readFile.bind(host);
+  const baseGetSourceFile = host.getSourceFile.bind(host);
 
-  while (currentDir !== root) {
-    const tsconfigPath = path.join(currentDir, 'tsconfig.json');
-    if (fs.existsSync(tsconfigPath)) {
-      return tsconfigPath;
+  host.readFile = (fileName: string): string | undefined => {
+    const content = baseReadFile(fileName);
+    const ext = sfcExtension(fileName);
+    if (content === undefined || ext === undefined) {
+      return content;
     }
-    currentDir = path.dirname(currentDir);
-  }
+    return extractSfcScript(content, ext);
+  };
 
-  return undefined;
+  host.getSourceFile = (
+    fileName: string,
+    languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
+    onError?: (message: string) => void,
+    shouldCreateNewSourceFile?: boolean
+  ): ts.SourceFile | undefined => {
+    if (!isSfcFile(fileName)) {
+      return baseGetSourceFile(
+        fileName,
+        languageVersionOrOptions,
+        onError,
+        shouldCreateNewSourceFile
+      );
+    }
+    const text = host.readFile(fileName);
+    if (text === undefined) {
+      return undefined;
+    }
+    return ts.createSourceFile(
+      fileName,
+      text,
+      languageVersionOrOptions,
+      /* setParentNodes */ true,
+      ts.ScriptKind.TS
+    );
+  };
+
+  return host;
 }

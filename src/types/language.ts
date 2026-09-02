@@ -1,6 +1,6 @@
 import type { DependencyGraph } from './graph';
 
-export type SupportedLanguage = 'typescript' | 'python' | 'go' | 'java' | 'dart';
+export type SupportedLanguage = 'typescript' | 'python' | 'go' | 'java' | 'dart' | 'php';
 
 export interface LanguageAnalyzer {
   readonly language: SupportedLanguage;

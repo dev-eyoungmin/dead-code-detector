@@ -18,15 +18,29 @@ export const DEFAULT_INCLUDE_PATTERNS = [
   '**/*.tsx',
   '**/*.js',
   '**/*.jsx',
+  '**/*.mts',
+  '**/*.cts',
+  '**/*.mjs',
+  '**/*.cjs',
+  '**/*.vue',
+  '**/*.svelte',
   '**/*.py',
   '**/*.go',
   '**/*.java',
+  '**/*.dart',
+  '**/*.php',
 ];
 
 export const DEFAULT_EXCLUDE_PATTERNS = [
   '**/node_modules/**',
   '**/dist/**',
   '**/build/**',
+  '**/coverage/**',
+  '**/.next/**',
+  '**/.nuxt/**',
+  '**/.output/**',
+  '**/.svelte-kit/**',
+  '**/.claude/**',
   '**/*.d.ts',
   '**/*.test.*',
   '**/*.spec.*',
@@ -39,6 +53,9 @@ export const DEFAULT_EXCLUDE_PATTERNS = [
   '**/target/**',
   '**/Test*.java',
   '**/*Test.java',
+  '**/*Test.php',
+  '**/*.spec.php',
+  '**/tests/**',
 ];
 
 export const DEBOUNCE_DELAY_MS = 1000;

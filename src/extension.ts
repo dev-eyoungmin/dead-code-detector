@@ -73,6 +73,10 @@ export function activate(context: vscode.ExtensionContext): void {
       { scheme: 'file', language: 'python' },
       { scheme: 'file', language: 'go' },
       { scheme: 'file', language: 'java' },
+      { scheme: 'file', language: 'vue' },
+      { scheme: 'file', language: 'svelte' },
+      { scheme: 'file', language: 'dart' },
+      { scheme: 'file', language: 'php' },
     ];
 
     const codeActionDisposable = vscode.languages.registerCodeActionsProvider(
@@ -118,7 +122,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // Only analyze supported language files
       const supportedLanguages = [
         'typescript', 'typescriptreact', 'javascript', 'javascriptreact',
-        'python', 'go', 'java',
+        'python', 'go', 'java', 'vue', 'svelte', 'dart', 'php',
       ];
       if (!supportedLanguages.includes(document.languageId)) {
         return;

@@ -10,3 +10,7 @@ vitest.config.ts
 **/*.map
 .gitignore
 pnpm-lock.yaml
+.claude/**
+.superpowers/**
+docs/**
+*.vsix

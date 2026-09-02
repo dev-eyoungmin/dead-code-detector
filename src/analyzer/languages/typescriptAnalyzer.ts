@@ -1,90 +1,48 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import type { LanguageAnalyzer, DependencyGraph } from '../../types';
-import { createProgram, clearProgramCache } from '../programFactory';
-import { buildDependencyGraph } from '../dependencyGraph';
+import type { LanguageAnalyzer, DependencyGraph, FileNode } from '../../types';
+import { createPrograms, clearProgramCache } from '../programFactory';
+import { collectFileNodes } from '../dependencyGraph';
+import { buildGraphFromFileNodes } from '../graphBuilder';
 import { findFrameworkEntryPoints } from '../frameworkDetector';
+import {
+  resolvePackageJsonEntries,
+  findWorkspacePackageDirs,
+  findConventionalEntries,
+  findHtmlScriptEntries,
+  findServerlessEntries,
+} from '../entryPointResolver';
+import { TS_FAMILY_EXTENSIONS } from './index';
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
   readonly language = 'typescript' as const;
-  readonly extensions = ['.ts', '.tsx', '.js', '.jsx'];
+  readonly extensions = TS_FAMILY_EXTENSIONS;
   readonly vscodeLanguageIds = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'];
 
   buildGraph(files: string[], rootDir: string): DependencyGraph {
     const tsconfigPath = this.findTsConfig(rootDir);
-    const program = createProgram(files, tsconfigPath);
-    return buildDependencyGraph(files, program);
+    const groups = createPrograms(files, rootDir, tsconfigPath);
+    const fileNodes = new Map<string, FileNode>();
+    for (const group of groups) {
+      collectFileNodes(group.files, group.program, { rootDir }, fileNodes);
+    }
+    return buildGraphFromFileNodes(fileNodes);
   }
 
   async findEntryPoints(rootDir: string): Promise<string[]> {
-    const entryPoints: string[] = [];
+    const dirs = [rootDir, ...(await findWorkspacePackageDirs(rootDir))];
+    const entries = new Set<string>();
 
-    // Check package.json for main/module fields
-    const packageJsonPath = path.join(rootDir, 'package.json');
-    if (fs.existsSync(packageJsonPath)) {
-      try {
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-
-        if (packageJson.main) {
-          const mainPath = path.resolve(rootDir, packageJson.main);
-          if (fs.existsSync(mainPath)) {
-            entryPoints.push(mainPath);
-          }
-        }
-
-        if (packageJson.module) {
-          const modulePath = path.resolve(rootDir, packageJson.module);
-          if (fs.existsSync(modulePath)) {
-            entryPoints.push(modulePath);
-          }
-        }
-
-        if (packageJson.exports) {
-          const exportsValue = packageJson.exports;
-          if (typeof exportsValue === 'string') {
-            const exportPath = path.resolve(rootDir, exportsValue);
-            if (fs.existsSync(exportPath)) {
-              entryPoints.push(exportPath);
-            }
-          } else if (typeof exportsValue === 'object') {
-            for (const exp of Object.values(exportsValue)) {
-              if (typeof exp === 'string') {
-                const exportPath = path.resolve(rootDir, exp);
-                if (fs.existsSync(exportPath)) {
-                  entryPoints.push(exportPath);
-                }
-              }
-            }
-          }
-        }
-      } catch {
-        // Failed to parse package.json
-      }
+    for (const d of dirs) {
+      for (const e of resolvePackageJsonEntries(d)) entries.add(e);
+      for (const e of await findConventionalEntries(d)) entries.add(e);
     }
 
-    // Look for common entry point files
-    const commonEntryPoints = [
-      'src/index.ts', 'src/index.tsx', 'src/index.js', 'src/index.jsx',
-      'src/main.ts', 'src/main.tsx', 'src/main.js', 'src/main.jsx',
-      'index.ts', 'index.tsx', 'index.js', 'index.jsx',
-    ];
+    for (const e of await findFrameworkEntryPoints(rootDir)) entries.add(e);
+    for (const e of await findHtmlScriptEntries(rootDir)) entries.add(e);
+    for (const e of await findServerlessEntries(rootDir)) entries.add(e);
 
-    for (const entry of commonEntryPoints) {
-      const entryPath = path.join(rootDir, entry);
-      if (fs.existsSync(entryPath) && !entryPoints.includes(entryPath)) {
-        entryPoints.push(entryPath);
-      }
-    }
-
-    // Add framework-specific entry points
-    const frameworkEntryPoints = await findFrameworkEntryPoints(rootDir);
-    for (const ep of frameworkEntryPoints) {
-      if (!entryPoints.includes(ep)) {
-        entryPoints.push(ep);
-      }
-    }
-
-    return entryPoints;
+    return Array.from(entries).map((p) => path.normalize(p));
   }
 
   dispose(): void {

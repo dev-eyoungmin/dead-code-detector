@@ -1,8 +1,8 @@
 {
   "name": "dead-code-detector",
   "displayName": "Dead Code Detector",
-  "description": "Detect unused files, exports, and local variables/functions in TypeScript, JavaScript, Python, Go, Java, and Dart/Flutter projects",
-  "version": "1.1.1",
+  "description": "Detect unused files, exports, and local variables/functions in TypeScript, JavaScript, Vue, Svelte, Python, Go, Java, Dart/Flutter, and PHP/Laravel projects",
+  "version": "1.2.0",
   "publisher": "dead-code-detector",
   "license": "MIT",
   "repository": {
@@ -25,6 +25,12 @@
     "go",
     "golang",
     "java",
+    "php",
+    "laravel",
+    "dart",
+    "flutter",
+    "vue",
+    "svelte",
     "lint"
   ],
   "icon": "resources/icon.png",
@@ -35,7 +41,11 @@
     "workspaceContains:**/*.py",
     "workspaceContains:**/go.mod",
     "workspaceContains:**/pom.xml",
-    "workspaceContains:**/build.gradle"
+    "workspaceContains:**/build.gradle",
+    "workspaceContains:**/pubspec.yaml",
+    "workspaceContains:**/composer.json",
+    "workspaceContains:**/*.php",
+    "workspaceContains:**/package.json"
   ],
   "contributes": {
     "commands": [
@@ -105,9 +115,17 @@
             "**/*.tsx",
             "**/*.js",
             "**/*.jsx",
+            "**/*.mts",
+            "**/*.cts",
+            "**/*.mjs",
+            "**/*.cjs",
+            "**/*.vue",
+            "**/*.svelte",
             "**/*.py",
             "**/*.go",
-            "**/*.java"
+            "**/*.java",
+            "**/*.dart",
+            "**/*.php"
           ],
           "description": "Glob patterns for files to include in analysis"
         },
@@ -117,6 +135,12 @@
             "**/node_modules/**",
             "**/dist/**",
             "**/build/**",
+            "**/coverage/**",
+            "**/.next/**",
+            "**/.nuxt/**",
+            "**/.output/**",
+            "**/.svelte-kit/**",
+            "**/.claude/**",
             "**/*.d.ts",
             "**/*.test.*",
             "**/*.spec.*",
@@ -128,14 +152,17 @@
             "**/*_test.go",
             "**/target/**",
             "**/Test*.java",
-            "**/*Test.java"
+            "**/*Test.java",
+            "**/*Test.php",
+            "**/*.spec.php",
+            "**/tests/**"
           ],
           "description": "Glob patterns for files to exclude from analysis"
         },
         "deadCodeDetector.entryPoints": {
           "type": "array",
           "default": [],
-          "description": "Entry point files (always considered used). If empty, auto-detected from package.json"
+          "description": "Entry point files (always considered used). If empty, auto-detected from package.json, pubspec.yaml, composer.json, and framework conventions"
         },
         "deadCodeDetector.analyzeOnSave": {
           "type": "boolean",
@@ -176,14 +203,18 @@
               "typescript",
               "python",
               "go",
-              "java"
+              "java",
+              "dart",
+              "php"
             ]
           },
           "default": [
             "typescript",
             "python",
             "go",
-            "java"
+            "java",
+            "dart",
+            "php"
           ],
           "description": "Languages to include in dead code analysis"
         },

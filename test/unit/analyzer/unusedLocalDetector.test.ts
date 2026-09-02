@@ -174,3 +174,104 @@ describe('unusedLocalDetector - confidence levels', () => {
     expect(results[0].confidence).toBe('medium');
   });
 });
+
+describe('unusedLocalDetector - confidence by local kind', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unused-local-kind-test-'));
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should assign medium confidence to an unused parameter', () => {
+    const tsFile = path.join(tempDir, 'handler.ts');
+    fs.writeFileSync(tsFile, 'function handler(req, res) { return 1; }');
+
+    const graph = createGraphWithLocal(tsFile, {
+      name: 'res',
+      line: 1,
+      column: 21,
+      kind: 'parameter',
+      references: 0,
+    });
+
+    const results = detectUnusedLocals(graph);
+    expect(results).toHaveLength(1);
+    expect(results[0].confidence).toBe('medium');
+    expect(results[0].kind).toBe('parameter');
+  });
+
+  it('should assign medium confidence to an unused private field', () => {
+    const tsFile = path.join(tempDir, 'service.ts');
+    fs.writeFileSync(tsFile, 'class S { private cache = 1; }');
+
+    const graph = createGraphWithLocal(tsFile, {
+      name: 'cache',
+      line: 1,
+      column: 10,
+      kind: 'field',
+      references: 0,
+    });
+
+    const results = detectUnusedLocals(graph);
+    expect(results).toHaveLength(1);
+    expect(results[0].confidence).toBe('medium');
+    expect(results[0].kind).toBe('field');
+  });
+
+  it('should assign high confidence to an unused private method', () => {
+    const tsFile = path.join(tempDir, 'service.ts');
+    fs.writeFileSync(tsFile, 'class S { private helper() { return 1; } }');
+
+    const graph = createGraphWithLocal(tsFile, {
+      name: 'helper',
+      line: 1,
+      column: 10,
+      kind: 'method',
+      references: 0,
+    });
+
+    const results = detectUnusedLocals(graph);
+    expect(results).toHaveLength(1);
+    expect(results[0].confidence).toBe('high');
+    expect(results[0].kind).toBe('method');
+  });
+
+  it('should not report a PHP private method at high confidence', () => {
+    // Reference counting for PHP members is regex based and blanks string
+    // bodies, so a method reached only through a string callable counts zero
+    // references. Such a finding must never claim the top confidence tier.
+    const phpFile = path.join(tempDir, 'Widget.php');
+    fs.writeFileSync(
+      phpFile,
+      [
+        '<?php',
+        'class Widget {',
+        '    public function boot() {',
+        "        call_user_func([$this, 'refresh']);",
+        '    }',
+        '    private function refresh() { return 1; }',
+        '}',
+      ].join('\n')
+    );
+
+    const graph = createGraphWithLocal(phpFile, {
+      name: 'refresh',
+      line: 6,
+      column: 4,
+      kind: 'method',
+      references: 0,
+    });
+
+    const results = detectUnusedLocals(graph);
+    expect(results).toHaveLength(1);
+    expect(results[0].confidence).not.toBe('high');
+    expect(results[0].confidence).toBe('medium');
+    expect(results[0].kind).toBe('method');
+  });
+});

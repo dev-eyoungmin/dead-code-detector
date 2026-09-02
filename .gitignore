@@ -3,3 +3,5 @@ dist/
 *.vsix
 .env
 .DS_Store
+.claude/
+.superpowers/

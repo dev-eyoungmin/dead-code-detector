@@ -245,3 +245,121 @@ describe('importCollector - path alias resolution', () => {
     expect(imports[0].resolvedPath).toContain('utils.ts');
   });
 });
+
+describe('collectImports - modern patterns', () => {
+  let dir: string;
+  beforeEach(() => {
+    // realpath: on macOS os.tmpdir() itself is a symlink (/var -> /private/var)
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ic-')));
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const write = (rel: string, c: string) => {
+    const p = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, c);
+    return p;
+  };
+  const collect = (entry: string, files: string[], rootDir: string = dir) => {
+    const program = ts.createProgram(files, {
+      allowJs: true,
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2020,
+      moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    });
+    return collectImports(program.getSourceFile(entry)!, program, rootDir);
+  };
+  const linkWorkspacePackage = () => {
+    const pkg = write('packages/lib/index.ts', 'export const lib = 1;');
+    fs.writeFileSync(path.join(dir, 'packages/lib/package.json'), '{"name":"@ws/lib","main":"index.ts"}');
+    fs.mkdirSync(path.join(dir, 'node_modules/@ws'), { recursive: true });
+    fs.symlinkSync(path.join(dir, 'packages/lib'), path.join(dir, 'node_modules/@ws/lib'), 'dir');
+    return pkg;
+  };
+
+  it('flags export * from as a star re-export', () => {
+    const x = write('x.ts', 'export const a = 1;');
+    const b = write('barrel.ts', "export * from './x'; export * as ns from './x';");
+    const imps = collect(b, [b, x]);
+    expect(imps).toHaveLength(2);
+    expect(imps.every((i) => i.isStarReExport && i.resolvedPath === x)).toBe(true);
+  });
+
+  it('flags export { x } from as a named re-export, but not a plain import', () => {
+    const x = write('x.ts', 'export const a = 1;');
+    // A file can both consume and forward the same name; only the
+    // ExportDeclaration record is a forward.
+    const b = write('barrel.ts', "import { a } from './x';\nexport { a } from './x';\nexport const use = a;");
+    const imps = collect(b, [b, x]);
+    expect(imps).toHaveLength(2);
+    const consumption = imps.find((i) => !i.isNamedReExport);
+    const forward = imps.find((i) => i.isNamedReExport);
+    expect(consumption).toBeDefined();
+    expect(forward).toBeDefined();
+    expect(forward!.specifiers.map((sp) => sp.name)).toEqual(['a']);
+    expect(forward!.isStarReExport).toBeUndefined();
+  });
+
+  it('does not flag export * from as a named re-export', () => {
+    const x = write('x.ts', 'export const a = 1;');
+    const b = write('barrel.ts', "export * from './x';");
+    expect(collect(b, [b, x])[0].isNamedReExport).toBeUndefined();
+  });
+
+  it('strips ?query and #hash from specifiers (Vite ?worker, ?raw)', () => {
+    const w = write('w.ts', 'export {}');
+    const a = write('a.ts', "import W from './w?worker'; import raw from './w?raw'; import h from './w#frag';");
+    expect(collect(a, [a, w]).map((i) => i.resolvedPath)).toEqual([w, w, w]);
+  });
+
+  it('collects destructured require as named specifiers', () => {
+    const x = write('x.js', 'module.exports = { a: 1, b: 2 };');
+    const a = write('a.js', "const { a, b: renamed } = require('./x'); const whole = require('./x');");
+    const imps = collect(a, [a, x]);
+    expect(imps[0].specifiers.map((s) => s.name)).toEqual(['a', 'b']);
+    expect(imps[0].isNamespaceImport).toBe(false);
+    expect(imps[1].isNamespaceImport).toBe(true);
+  });
+
+  it('turns template-literal and concatenated dynamic imports into directory globs', () => {
+    write('locales/en.ts', 'export default 1');
+    const a = write(
+      'a.ts',
+      'export const l = (x: string) => import(`./locales/${x}`); export const m = (x: string) => import("./locales/" + x + ".ts");'
+    );
+    const imps = collect(a, [a]);
+    expect(imps).toHaveLength(2);
+    expect(imps[0].globPattern).toBe(path.join(dir, 'locales') + '/**');
+    expect(imps[1].globPattern).toBe(path.join(dir, 'locales') + '/**');
+  });
+
+  it('turns import.meta.glob and require.context into globs', () => {
+    write('mods/a.ts', 'export default 1');
+    const a = write('a.ts', "const m = import.meta.glob('./mods/*.ts'); const c = require.context('./mods', true, /\\.ts$/);");
+    const imps = collect(a, [a]);
+    expect(imps[0].globPattern).toBe(path.join(dir, 'mods', '*.ts'));
+    expect(imps[1].globPattern).toBe(path.join(dir, 'mods') + '/**');
+  });
+
+  it('collects Worker / new URL(import.meta.url) targets as namespace imports', () => {
+    const w = write('w.ts', 'self.onmessage = () => {};');
+    const a = write(
+      'a.ts',
+      "new Worker(new URL('./w.ts', import.meta.url)); new SharedWorker('./w.ts'); const u = new URL('./w.ts', import.meta.url);"
+    );
+    const imps = collect(a, [a, w]);
+    expect(imps).toHaveLength(3);
+    expect(imps.every((i) => i.resolvedPath === w && i.isNamespaceImport)).toBe(true);
+  });
+
+  it('resolves symlinked workspace packages inside rootDir as internal', () => {
+    const pkg = linkWorkspacePackage();
+    const a = write('app/a.ts', "import { lib } from '@ws/lib';");
+    expect(collect(a, [a, pkg])[0].resolvedPath).toBe(pkg);
+  });
+
+  it('resolves symlinked workspace packages when rootDir has a trailing separator', () => {
+    const pkg = linkWorkspacePackage();
+    const a = write('app/a.ts', "import { lib } from '@ws/lib';");
+    expect(collect(a, [a, pkg], dir + path.sep)[0].resolvedPath).toBe(pkg);
+  });
+});

@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
-import { scanFiles } from '../scanner';
-import { analyze } from '../analyzer';
+import { runProjectAnalysis } from './runAnalysis';
 import { log, logError } from '../utils/logger';
 import { filterByConfidence } from '../utils/filterByConfidence';
-import { getAllAnalyzers } from '../analyzer/languages';
 import type { CommandDeps } from './index';
 
 /**
@@ -38,44 +36,23 @@ export function createAnalyzeProjectCommand(deps: CommandDeps): () => Promise<vo
         },
         async (progress) => {
           try {
-            // Step 1: Update status and scan files
+            // Step 1: Update status
             statusBar.showAnalyzing();
             progress.report({ message: 'Scanning files...' });
             log('Starting project analysis...');
 
-            const scanResult = await scanFiles({
-              rootDir,
-              include: config.include,
-              exclude: config.exclude,
-            });
+            // Step 2 & 3: Scan, find entry points and run analysis
+            progress.report({ message: 'Analyzing code...' });
+            const { result, fileCount, entryPoints } = await runProjectAnalysis(rootDir, config);
 
-            log(`Scanned ${scanResult.files.length} files in ${scanResult.durationMs}ms`);
+            log(`Scanned ${fileCount} files`);
+            log(`Entry points: ${entryPoints.join(', ')}`);
 
-            if (scanResult.files.length === 0) {
+            if (fileCount === 0) {
               vscode.window.showInformationMessage('No files found to analyze');
               statusBar.showIdle();
               return;
             }
-
-            // Step 2: Find entry points
-            progress.report({ message: 'Finding entry points...' });
-            let entryPoints = config.entryPoints;
-
-            if (entryPoints.length === 0) {
-              entryPoints = await findEntryPoints(rootDir);
-              log(`Auto-detected entry points: ${entryPoints.join(', ')}`);
-            } else {
-              log(`Using configured entry points: ${entryPoints.join(', ')}`);
-            }
-
-            // Step 3: Run analysis
-            progress.report({ message: 'Analyzing code...' });
-            const result = await analyze({
-              files: scanResult.files,
-              rootDir,
-              entryPoints,
-              ignorePatterns: config.ignorePatterns,
-            });
 
             log(
               `Analysis complete: ${result.unusedFiles.length} unused files, ` +
@@ -127,23 +104,3 @@ export function createAnalyzeProjectCommand(deps: CommandDeps): () => Promise<vo
     }
   };
 }
-
-/**
- * Find entry points automatically by collecting from all registered language analyzers
- */
-async function findEntryPoints(rootDir: string): Promise<string[]> {
-  const entryPoints: string[] = [];
-  const analyzers = getAllAnalyzers();
-
-  for (const analyzer of analyzers) {
-    const points = await analyzer.findEntryPoints(rootDir);
-    for (const point of points) {
-      if (!entryPoints.includes(point)) {
-        entryPoints.push(point);
-      }
-    }
-  }
-
-  return entryPoints;
-}
-
