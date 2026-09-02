@@ -220,19 +220,25 @@
         },
         "deadCodeDetector.entryPointDecorators": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Additional decorator/annotation names (without @) that mark a class or function as a DI entry point (e.g. [\"MyCustomDecorator\"]). Built-in DI decorators (injectable, Injectable, singleton, Service, Component, etc.) are recognized automatically."
         },
         "deadCodeDetector.containerFiles": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Glob patterns for DI container registration files. All imports in these files are treated as used (e.g. [\"**/container.ts\", \"**/di.ts\"])."
         },
         "deadCodeDetector.alwaysUsedPatterns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Export name glob patterns that are always considered used and will not be reported as dead code (e.g. [\"*Repository\", \"*Service\"])."
         }
@@ -258,18 +264,41 @@
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "@vscode/vsce": "^2.22.0",
-    "concurrently": "^8.2.0",
-    "esbuild": "^0.25.0",
+    "@vscode/vsce": "^3.9.2",
+    "concurrently": "^10.0.5",
+    "esbuild": "^0.28.1",
     "eslint": "^8.56.0",
     "prettier": "^3.2.0",
     "typescript": "^5.3.0",
-    "vitest": "^4.0.18"
+    "vite": "^7.3.6",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
     "fast-glob": "^3.3.0",
     "minimatch": "^9.0.7",
     "typescript": "^5.3.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@1": "^1.1.18",
+      "brace-expansion@5": "^5.0.9",
+      "picomatch@2": "^2.3.2",
+      "picomatch@4": "^4.0.4",
+      "rollup": "^4.59.0",
+      "postcss": "^8.5.23",
+      "nanoid@3": "^3.3.18",
+      "esbuild": "^0.28.1",
+      "undici": "^7.29.0",
+      "underscore": "^1.13.8",
+      "tmp": "^0.2.6",
+      "form-data": "^4.0.6",
+      "qs": "^6.15.2",
+      "uuid": "^11.1.1",
+      "flatted": "^3.4.4",
+      "js-yaml@4": "^4.3.1",
+      "ajv@6": "^6.14.0",
+      "vite": "^7.3.6"
+    }
   }
 }
