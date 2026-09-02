@@ -1,14 +1,19 @@
-import * as fs from 'fs';
 import type { DependencyGraph, ImportInfo, ExportInfo, LocalSymbolInfo } from '../types';
 import type { UnusedFileResult } from '../types/analysis';
 import { hasFileIgnoreComment } from '../utils/ignoreComment';
+import { readSource } from './sourceCache';
 
 /**
- * Detects unused files in the dependency graph
+ * Detects unused files in the dependency graph.
+ *
+ * When `reachable` is provided, files that are imported only by other
+ * unreachable files ("dead clusters") are additionally reported at low
+ * confidence. Passing `undefined` preserves the inbound-edge-only behaviour.
  */
 export function detectUnusedFiles(
   graph: DependencyGraph,
-  entryPoints: string[]
+  entryPoints: string[],
+  reachable?: Set<string>
 ): UnusedFileResult[] {
   const entryPointSet = new Set(entryPoints);
   const unusedFiles: UnusedFileResult[] = [];
@@ -24,13 +29,9 @@ export function detectUnusedFiles(
     // File is unused if no other file imports it
     if (inboundCount === 0) {
       // Check @dead-code-ignore file-level comment
-      try {
-        const source = fs.readFileSync(filePath, 'utf-8');
-        if (hasFileIgnoreComment(source)) {
-          continue;
-        }
-      } catch {
-        // If file can't be read, proceed with detection
+      const source = readSource(filePath);
+      if (source && hasFileIgnoreComment(source)) {
+        continue;
       }
 
       const hasSideEffects = checkForSideEffects(filePath, fileNode);
@@ -41,6 +42,16 @@ export function detectUnusedFiles(
         reason: hasSideEffects
           ? 'No imports found, but file may have side effects'
           : 'No imports found',
+      });
+    } else if (reachable && !reachable.has(filePath)) {
+      const source = readSource(filePath);
+      if (source && hasFileIgnoreComment(source)) {
+        continue;
+      }
+      unusedFiles.push({
+        filePath,
+        confidence: 'low',
+        reason: 'Not reachable from any entry point (imported only by unreachable files)',
       });
     }
   }

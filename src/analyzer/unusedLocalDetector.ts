@@ -1,7 +1,8 @@
-import * as fs from 'fs';
 import type { DependencyGraph } from '../types';
 import type { UnusedLocalResult, LocalKind } from '../types/analysis';
 import { hasIgnoreComment, hasFileIgnoreComment } from '../utils/ignoreComment';
+import { readSource } from './sourceCache';
+import { isTypeScriptFamily } from './languages';
 
 /**
  * Detects unused local symbols in the dependency graph
@@ -16,11 +17,7 @@ export function detectUnusedLocals(
     let source: string | null = null;
     const getSource = (): string | null => {
       if (source !== null) return source;
-      try {
-        source = fs.readFileSync(filePath, 'utf-8');
-      } catch {
-        source = '';
-      }
+      source = readSource(filePath) ?? '';
       return source;
     };
 
@@ -64,7 +61,7 @@ export function detectUnusedLocals(
  * React hook results (set*, dispatch) in .tsx/.jsx are commonly intentionally unused.
  */
 function determineLocalConfidence(
-  local: { name: string; kind: string },
+  local: { name: string; kind: string; isParameterProperty?: boolean },
   filePath: string
 ): 'high' | 'medium' | 'low' {
   if (
@@ -88,6 +85,25 @@ function determineLocalConfidence(
     return 'medium';
   }
 
+  // Unused parameters are often required by a signature contract
+  if (local.kind === 'parameter') {
+    return 'medium';
+  }
+
+  // Private fields may be written through frameworks or reflection
+  if (local.kind === 'field') {
+    return 'medium';
+  }
+
+  // Outside the TypeScript family, member references are counted with regexes
+  // over source whose string literals have been blanked out. That cannot see a
+  // method reached through a string callable — `call_user_func([$this, 'x'])`,
+  // `array_map([$this, 'x'], ...)`, `$this->{$handler}()` — so a zero-reference
+  // method there is not evidence strong enough for the top tier.
+  if (local.kind === 'method' && !isTypeScriptFamily(filePath)) {
+    return 'medium';
+  }
+
   return 'high';
 }
 
@@ -104,6 +120,12 @@ function mapToLocalKind(kind: string): LocalKind {
       return 'class';
     case 'parameter':
       return 'parameter';
+    case 'method':
+      return 'method';
+    case 'field':
+      return 'field';
+    case 'constant':
+      return 'constant';
     default:
       return 'unknown';
   }

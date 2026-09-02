@@ -152,4 +152,23 @@ describe('exportCollector', () => {
       expect(exports[0].kind).toBe('enum');
     });
   });
+
+  describe('collectExports - CommonJS', () => {
+    const sf = (code: string) => ts.createSourceFile('/p/a.js', code, ts.ScriptTarget.ES2020, true, ts.ScriptKind.JS);
+    it('collects module.exports object literal keys', () => {
+      const names = collectExports(sf('const a = 1; module.exports = { a, b: () => 2, ...rest };')).map((e) => e.name);
+      expect(names).toEqual(['a', 'b']);
+    });
+    it('collects module.exports = expr as default', () => {
+      const e = collectExports(sf('module.exports = function main() {};'));
+      expect(e).toEqual([expect.objectContaining({ name: 'default', isDefault: true, kind: 'default' })]);
+    });
+    it('collects exports.x and module.exports.x', () => {
+      const names = collectExports(sf('exports.x = 1; module.exports.y = 2;')).map((e) => e.name);
+      expect(names).toEqual(['x', 'y']);
+    });
+    it('does not duplicate names', () => {
+      expect(collectExports(sf('exports.x = 1; exports.x = 2;'))).toHaveLength(1);
+    });
+  });
 });

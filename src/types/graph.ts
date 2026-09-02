@@ -12,6 +12,16 @@ export interface ImportInfo {
   isNamespaceImport: boolean;
   isDynamicImport: boolean;
   isTypeOnly: boolean;
+  /** True for `export * from` / `export * as X from` (creates an edge; marks no export used) */
+  isStarReExport?: boolean;
+  /**
+   * True for `export { x } from './y'` — the record comes from an
+   * ExportDeclaration that forwards names rather than consuming them.
+   * Distinguishes a forward from an ImportDeclaration of the same specifier.
+   */
+  isNamedReExport?: boolean;
+  /** Absolute minimatch pattern for glob-like imports (template-literal import(), import.meta.glob, require.context) */
+  globPattern?: string;
 }
 
 export interface ImportSpecifier {
@@ -41,6 +51,8 @@ export interface LocalSymbolInfo {
   column: number;
   kind: string;
   references: number;
+  /** True for constructor parameter properties (`constructor(private x: T)`) */
+  isParameterProperty?: boolean;
 }
 
 export interface DependencyGraph {

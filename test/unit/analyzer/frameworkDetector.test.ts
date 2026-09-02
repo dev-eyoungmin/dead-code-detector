@@ -1060,5 +1060,94 @@ describe('frameworkDetector', () => {
       expect(result[0]).not.toContain('node_modules');
       expect(result[0]).toContain(path.join('pages', 'index.tsx'));
     });
+
+    it('should detect Nuxt entry points from pages and components', async () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: { nuxt: '^3.0.0' },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const pagesDir = path.join(tempDir, 'pages');
+      fs.mkdirSync(pagesDir, { recursive: true });
+      fs.writeFileSync(path.join(pagesDir, 'index.vue'), '<template></template>');
+
+      const componentsDir = path.join(tempDir, 'components');
+      fs.mkdirSync(componentsDir, { recursive: true });
+      fs.writeFileSync(path.join(componentsDir, 'Header.vue'), '<template></template>');
+
+      const result = await findFrameworkEntryPoints(tempDir);
+
+      expect(result.some((f) => f.includes(path.join('pages', 'index.vue')))).toBe(true);
+      expect(result.some((f) => f.includes(path.join('components', 'Header.vue')))).toBe(true);
+    });
+
+    it('should detect SvelteKit entry points under src/routes', async () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: { '@sveltejs/kit': '^2.0.0' },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const routesDir = path.join(tempDir, 'src', 'routes');
+      fs.mkdirSync(routesDir, { recursive: true });
+      fs.writeFileSync(path.join(routesDir, '+page.svelte'), '<h1>Hi</h1>');
+
+      const result = await findFrameworkEntryPoints(tempDir);
+
+      expect(result.some((f) => f.includes(path.join('src', 'routes', '+page.svelte')))).toBe(true);
+    });
+
+    it('should include angular.json main/polyfills entries when angular is detected', async () => {
+      const packageJson = {
+        name: 'test-project',
+        version: '1.0.0',
+        dependencies: { '@angular/core': '^17.0.0' },
+      };
+
+      fs.writeFileSync(
+        path.join(tempDir, 'package.json'),
+        JSON.stringify(packageJson, null, 2)
+      );
+
+      const srcDir = path.join(tempDir, 'src');
+      fs.mkdirSync(srcDir, { recursive: true });
+      fs.writeFileSync(path.join(srcDir, 'main.ts'), 'bootstrap();');
+      fs.writeFileSync(path.join(srcDir, 'polyfills.ts'), '');
+
+      const angularJson = {
+        projects: {
+          app: {
+            architect: {
+              build: {
+                options: {
+                  main: 'src/main.ts',
+                  polyfills: 'src/polyfills.ts',
+                },
+              },
+            },
+          },
+        },
+      };
+      fs.writeFileSync(
+        path.join(tempDir, 'angular.json'),
+        JSON.stringify(angularJson, null, 2)
+      );
+
+      const result = await findFrameworkEntryPoints(tempDir);
+
+      expect(result.some((f) => f.includes(path.join('src', 'main.ts')))).toBe(true);
+      expect(result.some((f) => f.includes(path.join('src', 'polyfills.ts')))).toBe(true);
+    });
   });
 });

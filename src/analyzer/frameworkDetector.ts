@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import fg from 'fast-glob';
+import { readSource } from './sourceCache';
 
 export type FrameworkType =
   | 'next'
@@ -14,6 +15,8 @@ export type FrameworkType =
   | 'gatsby'
   | 'storybook'
   | 'expo'
+  | 'nuxt'
+  | 'sveltekit'
   | null;
 
 export interface FrameworkInfo {
@@ -287,6 +290,54 @@ const FRAMEWORK_CONFIGS: Record<string, FrameworkInfo> = {
       'ErrorBoundary',
     ],
   },
+  nuxt: {
+    type: 'nuxt',
+    entryPatterns: [
+      'app.vue',
+      'error.vue',
+      'pages/**/*.{vue,ts,js}',
+      'layouts/**/*.{vue,ts,js}',
+      'components/**/*.{vue,ts,js}',
+      'composables/**/*.{vue,ts,js}',
+      'middleware/**/*.{vue,ts,js}',
+      'plugins/**/*.{vue,ts,js}',
+      'server/**/*.{vue,ts,js}',
+      'utils/**/*.{vue,ts,js}',
+      'nuxt.config.{vue,ts,js}',
+    ],
+    conventionalExports: ['definePageMeta', 'defineNuxtConfig', 'default'],
+  },
+  sveltekit: {
+    type: 'sveltekit',
+    entryPatterns: [
+      'src/routes/**/*.{svelte,ts,js}',
+      'src/hooks.client.{ts,js}',
+      'src/hooks.server.{ts,js}',
+      'src/params/*.{ts,js}',
+      'src/service-worker.{ts,js}',
+      'svelte.config.*',
+    ],
+    conventionalExports: [
+      'load',
+      'actions',
+      'prerender',
+      'ssr',
+      'csr',
+      'trailingSlash',
+      'handle',
+      'handleError',
+      'handleFetch',
+      'GET',
+      'POST',
+      'PUT',
+      'PATCH',
+      'DELETE',
+      'OPTIONS',
+      'HEAD',
+      'match',
+      'default',
+    ],
+  },
 };
 
 /** Dependency name → framework key mapping */
@@ -304,6 +355,8 @@ const FRAMEWORK_DEPS: Record<string, string> = {
   '@storybook/react': 'storybook',
   '@storybook/vue3': 'storybook',
   expo: 'expo',
+  nuxt: 'nuxt',
+  '@sveltejs/kit': 'sveltekit',
 };
 
 /**
@@ -372,6 +425,54 @@ export function detectFrameworks(rootDir: string): FrameworkInfo[] {
 }
 
 /**
+ * Recursively collects string values (or arrays of strings) found at
+ * `architect.build.options.{main,browser,polyfills}` for every project in an
+ * `angular.json` file, resolved to absolute, normalized, existing file paths.
+ */
+export function findAngularJsonEntries(rootDir: string): string[] {
+  const angularJsonPath = path.join(rootDir, 'angular.json');
+  if (!fs.existsSync(angularJsonPath)) {
+    return [];
+  }
+
+  let angularJson: Record<string, unknown>;
+  try {
+    angularJson = JSON.parse(fs.readFileSync(angularJsonPath, 'utf-8'));
+  } catch {
+    return [];
+  }
+
+  const entries = new Set<string>();
+  const projects = angularJson.projects;
+  if (!projects || typeof projects !== 'object') {
+    return [];
+  }
+
+  for (const project of Object.values(projects as Record<string, unknown>)) {
+    const architect = (project as { architect?: Record<string, { options?: unknown }> } | null)?.architect;
+    const options = architect?.build?.options;
+
+    if (!options || typeof options !== 'object') {
+      continue;
+    }
+
+    for (const key of ['main', 'browser', 'polyfills'] as const) {
+      const value = (options as Record<string, unknown>)[key];
+      const values = Array.isArray(value) ? value : [value];
+      for (const v of values) {
+        if (typeof v !== 'string') continue;
+        const abs = path.resolve(rootDir, v);
+        if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
+          entries.add(path.normalize(abs));
+        }
+      }
+    }
+  }
+
+  return Array.from(entries);
+}
+
+/**
  * Finds framework-specific entry point files
  */
 export async function findFrameworkEntryPoints(
@@ -391,7 +492,15 @@ export async function findFrameworkEntryPoints(
     ignore: ['**/node_modules/**'],
   });
 
-  return matched;
+  const result = new Set<string>(matched);
+
+  if (frameworks.some((f) => f.type === 'angular')) {
+    for (const entry of findAngularJsonEntries(rootDir)) {
+      result.add(entry);
+    }
+  }
+
+  return Array.from(result);
 }
 
 /**
@@ -553,10 +662,8 @@ export function isDIContainerFile(content: string): boolean {
 export async function findDIContainerFiles(files: string[]): Promise<string[]> {
   const result: string[] = [];
   for (const filePath of files) {
-    let content: string;
-    try {
-      content = fs.readFileSync(filePath, 'utf-8');
-    } catch {
+    const content = readSource(filePath);
+    if (content === null) {
       continue;
     }
     if (isDIContainerFile(content)) {

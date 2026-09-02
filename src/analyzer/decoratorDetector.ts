@@ -107,6 +107,54 @@ export const DART_DI_ANNOTATIONS: string[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// PHP built-in DI attribute names (PHP 8 `#[Attribute]` syntax)
+// ---------------------------------------------------------------------------
+
+export const PHP_DI_ATTRIBUTES: string[] = [
+  // PHP-DI
+  'Injectable',
+  'Inject',
+  // Symfony DependencyInjection — container wiring. `Required` is listed here
+  // because it makes the container call the setter it decorates, which is exactly
+  // the "looks unused, is always invoked" case this registry exists for.
+  'Autowire',
+  'AutowireCallable',
+  'AutowireIterator',
+  'AutowireLocator',
+  'AutowireServiceClosure',
+  'Autoconfigure',
+  'AutoconfigureTag',
+  'AsAlias',
+  'AsDecorator',
+  'AsTaggedItem',
+  'Lazy',
+  'Required',
+  'TaggedIterator',
+  'TaggedLocator',
+  'Target',
+  'When',
+  // Doctrine — the ORM invokes the decorated class/method through its event system
+  'AsDoctrineListener',
+  'AsEntityListener',
+  // Laravel 11+ container attributes
+  'Bind',
+  'Scoped',
+  'Singleton',
+  // Deliberately NOT listed:
+  // - `Exclude`: Symfony's #[Exclude] means "do not register this as a service".
+  //   It is evidence *against* container instantiation, so listing it would
+  //   downgrade exactly the classes the container never touches.
+  // - `Override` (PHP 8.3): Rector and PHPStan fixers add it mechanically across
+  //   whole codebases, so it would silently downgrade a large fraction of methods.
+  //   It also carries no framework-invocation evidence — it says the method
+  //   overrides a parent, not that anything calls the parent's contract.
+  // Generic service-locator names kept for user-defined / smaller containers
+  'Service',
+  'AsService',
+  'Transient',
+];
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -163,5 +211,21 @@ export function isDartDIAnnotation(
   return (
     DART_DI_ANNOTATIONS.includes(annotationName) ||
     userConfiguredDecorators.includes(annotationName)
+  );
+}
+
+/**
+ * Returns true when the given PHP attribute name is a known DI attribute
+ * OR is included in the user-configured list. The name must already be the
+ * short (last namespace segment) form, e.g. `AsService` for
+ * `#[\Symfony\Component\DependencyInjection\Attribute\AsService]`.
+ */
+export function isPhpDIAttribute(
+  attributeName: string,
+  userConfiguredDecorators: string[] = []
+): boolean {
+  return (
+    PHP_DI_ATTRIBUTES.includes(attributeName) ||
+    userConfiguredDecorators.includes(attributeName)
   );
 }

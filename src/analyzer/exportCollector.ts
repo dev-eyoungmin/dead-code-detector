@@ -64,8 +64,141 @@ export function collectExports(
   userDecorators: string[] = []
 ): ExportInfo[] {
   const exports: ExportInfo[] = [];
+  const seen = new Set<string>();
+
+  function pushExport(info: ExportInfo): void {
+    if (seen.has(info.name)) {
+      return;
+    }
+    seen.add(info.name);
+    exports.push(info);
+  }
+
+  function isFunctionValue(node: ts.Node): boolean {
+    return (
+      ts.isFunctionExpression(node) ||
+      ts.isArrowFunction(node) ||
+      ts.isMethodDeclaration(node)
+    );
+  }
 
   function visit(node: ts.Node): void {
+    // CommonJS: module.exports = {...} / module.exports = expr
+    //           exports.x = ... / module.exports.x = ...
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    ) {
+      const left = node.left;
+
+      // module.exports = ...
+      if (
+        ts.isPropertyAccessExpression(left) &&
+        ts.isIdentifier(left.expression) &&
+        left.expression.text === 'module' &&
+        left.name.text === 'exports'
+      ) {
+        const right = node.right;
+        if (ts.isObjectLiteralExpression(right)) {
+          for (const prop of right.properties) {
+            if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+              const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+                prop.getStart()
+              );
+              pushExport({
+                name: prop.name.text,
+                isDefault: false,
+                isReExport: false,
+                line: line + 1,
+                column: character,
+                kind: isFunctionValue(prop.initializer) ? 'function' : 'variable',
+                isTypeOnly: false,
+              });
+            } else if (ts.isShorthandPropertyAssignment(prop)) {
+              const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+                prop.getStart()
+              );
+              pushExport({
+                name: prop.name.text,
+                isDefault: false,
+                isReExport: false,
+                line: line + 1,
+                column: character,
+                kind: 'variable',
+                isTypeOnly: false,
+              });
+            } else if (ts.isMethodDeclaration(prop) && ts.isIdentifier(prop.name)) {
+              const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+                prop.getStart()
+              );
+              pushExport({
+                name: prop.name.text,
+                isDefault: false,
+                isReExport: false,
+                line: line + 1,
+                column: character,
+                kind: 'function',
+                isTypeOnly: false,
+              });
+            }
+            // SpreadAssignment (...rest) is intentionally ignored: the spread
+            // source's exports cannot be resolved statically here.
+          }
+        } else {
+          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            node.getStart()
+          );
+          pushExport({
+            name: 'default',
+            isDefault: true,
+            isReExport: false,
+            line: line + 1,
+            column: character,
+            kind: 'default',
+            isTypeOnly: false,
+          });
+        }
+      } else if (
+        // module.exports.x = ...
+        ts.isPropertyAccessExpression(left) &&
+        ts.isPropertyAccessExpression(left.expression) &&
+        ts.isIdentifier(left.expression.expression) &&
+        left.expression.expression.text === 'module' &&
+        left.expression.name.text === 'exports'
+      ) {
+        const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+          node.getStart()
+        );
+        pushExport({
+          name: left.name.text,
+          isDefault: false,
+          isReExport: false,
+          line: line + 1,
+          column: character,
+          kind: isFunctionValue(node.right) ? 'function' : 'variable',
+          isTypeOnly: false,
+        });
+      } else if (
+        // exports.x = ...
+        ts.isPropertyAccessExpression(left) &&
+        ts.isIdentifier(left.expression) &&
+        left.expression.text === 'exports'
+      ) {
+        const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+          node.getStart()
+        );
+        pushExport({
+          name: left.name.text,
+          isDefault: false,
+          isReExport: false,
+          line: line + 1,
+          column: character,
+          kind: isFunctionValue(node.right) ? 'function' : 'variable',
+          isTypeOnly: false,
+        });
+      }
+    }
+
     // export const/let/var x = ...
     // export function x() {}
     // export class X {}

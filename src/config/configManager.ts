@@ -31,7 +31,7 @@ export class ConfigManager {
       reportFormat: cfg.get<'html' | 'json' | 'markdown' | 'csv'>('reportFormat', 'html'),
       confidenceThreshold: cfg.get<'high' | 'medium' | 'low'>('confidenceThreshold', 'medium'),
       ignorePatterns: cfg.get<string[]>('ignorePatterns', []),
-      enabledLanguages: cfg.get<SupportedLanguage[]>('enabledLanguages', ['typescript', 'python', 'go', 'java']),
+      enabledLanguages: cfg.get<SupportedLanguage[]>('enabledLanguages', ['typescript', 'python', 'go', 'java', 'dart', 'php']),
       entryPointDecorators: cfg.get<string[]>('entryPointDecorators', []),
       containerFiles: cfg.get<string[]>('containerFiles', []),
       alwaysUsedPatterns: cfg.get<string[]>('alwaysUsedPatterns', []),
